@@ -1,0 +1,4 @@
+- 데이터 스플릿 전략
+- Bias/Variance Tradeoff
+- Drift 감지
+- Feature Store 사용

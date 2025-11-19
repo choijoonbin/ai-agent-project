@@ -1,0 +1,3 @@
+- IaC GitOps 방식
+- Blue/Green 배포
+- Observability 3요소: Log, Metric, Trace

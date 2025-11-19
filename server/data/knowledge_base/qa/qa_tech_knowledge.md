@@ -1,0 +1,4 @@
+- Boundary Value Analysis
+- Decision Table
+- Smoke Test
+- Performance Test 개념

@@ -1,0 +1,8 @@
+1. SQL 숙련도
+2. ETL/ELT 파이프라인 구축 능력
+3. Data Warehouse 설계 (Star Schema)
+4. BigQuery/Redshift/Snowflake 경험
+5. Kafka 기반 스트리밍 처리
+6. Python / Spark / Airflow
+7. 데이터 품질 관리
+8. 데이터 거버넌스

@@ -1,0 +1,4 @@
+- Kubernetes Pod Scheduling
+- Ingress vs Load Balancer
+- Network Policy
+- StatefulSet vs Deployment

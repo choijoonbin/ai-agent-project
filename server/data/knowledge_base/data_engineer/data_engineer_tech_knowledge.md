@@ -1,0 +1,4 @@
+- Batch vs Streaming
+- Data Lake vs Warehouse
+- Lambda Architecture
+- Spark Shuffle 원리

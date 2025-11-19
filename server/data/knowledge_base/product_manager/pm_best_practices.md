@@ -1,0 +1,4 @@
+- 가설 기반 출시(Hypothesis-driven)
+- MVP 방향성 설정
+- 유저 여정(UX Flow) 최적화
+- 스테이크홀더 조율

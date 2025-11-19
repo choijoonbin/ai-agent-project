@@ -1,0 +1,33 @@
+Backend Developer Core Competencies
+
+1. Database & Data Modeling
+- 관계형 DB, NoSQL DB 활용 능력
+- 정규화, 인덱스 설계, 스키마 모델링
+- ORM 활용 및 쿼리 최적화
+
+2. API Design
+- RESTful API 설계 원칙
+- OpenAPI/Swagger 기반 스펙 문서화
+- GraphQL 개념
+
+3. Server Architecture
+- Layered architecture (Controller, Service, Repository)
+- Clean Architecture / Hexagonal
+- Microservice Architecture 개념
+
+4. Performance & Scalability
+- 캐싱 전략 (Redis, CDN)
+- 비동기 처리, 메시지 큐(Kafka, RabbitMQ)
+- Latency, Throughput, Load 분산
+
+5. Infrastructure & Deployment
+- Docker, K8s, CI/CD
+- Cloud(AWS, Azure, GCP) 기본
+
+6. Security
+- 인증/인가(JWT, OAuth2, Session)
+- 보안 취약점(OWASP Top 10)
+
+7. Coding Quality
+- 테스트 코드 작성
+- Git Flow, 코드 리뷰

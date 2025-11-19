@@ -1,0 +1,26 @@
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Database
+sqlalchemy>=2.0.0
+
+# LangChain & LangGraph
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-community>=0.3.0
+langchain-core>=0.3.0
+langchain-text-splitters>=0.3.0
+langgraph>=0.2.0
+
+# Langfuse (Observability)
+langfuse>=2.0.0
+
+# Configuration & Settings
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Vector Store
+faiss-cpu>=1.7.4
+

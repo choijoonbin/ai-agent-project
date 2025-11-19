@@ -1,0 +1,4 @@
+- ETL 파이프라인 테스트
+- SLA/Alerting 구축
+- Incremental Load 설계
+- Failover 전략

@@ -1,0 +1,7 @@
+1. 리눅스/네트워크
+2. AWS/GCP/Azure 서비스 이해
+3. CI/CD 구축
+4. Docker, Kubernetes
+5. IaC (Terraform)
+6. 모니터링/로깅
+7. 보안/권한 관리

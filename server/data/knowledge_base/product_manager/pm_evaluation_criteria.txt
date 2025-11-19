@@ -1,0 +1,6 @@
+Backend Developer Competencies:
+- 데이터베이스 이해도
+- RESTful API 설계 능력
+- 트랜잭션 및 동시성 개념
+- Cloud 환경 이해 (AWS, Azure 등)
+- 코드 품질 / 테스트 / 릴리즈 프로세스

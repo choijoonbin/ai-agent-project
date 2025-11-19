@@ -1,0 +1,3 @@
+- 테스트 케이스 가독성
+- Regression Test 자동화
+- Exploratory Test

@@ -1,0 +1,7 @@
+Backend Developer Evaluation Criteria (총점 100점)
+
+1. Technical Depth (35점)
+2. System Design Ability (25점)
+3. Problem Solving (20점)
+4. Communication (10점)
+5. Testing & Code Quality (10점)
