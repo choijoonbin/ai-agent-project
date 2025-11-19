@@ -457,6 +457,7 @@ AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4
 AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME=text-embedding-ada-002
 
 # Langfuse 설정 (선택사항)
+LANGFUSE_ENABLED=true  # Langfuse 활성화 여부 (true/false, 기본값: true)
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
 LANGFUSE_HOST=https://cloud.langfuse.com
@@ -549,6 +550,20 @@ Langfuse를 통한 LLM 추적 및 관찰성을 활용하려면:
 2. **API 키 발급**: Public Key와 Secret Key 발급
 3. **환경 변수 설정**: `server/.env`에 Langfuse 설정 추가
 4. **대시보드 확인**: Langfuse 대시보드에서 세션별 추적 데이터 확인
+
+### Langfuse 활성/비활성 설정
+
+개발 중 비용 절감을 위해 Langfuse 전송을 비활성화할 수 있습니다:
+
+```env
+# Langfuse 비활성화 (개발 중 비용 절감)
+LANGFUSE_ENABLED=false
+```
+
+- `LANGFUSE_ENABLED=true` (기본값): Langfuse 추적 활성화
+- `LANGFUSE_ENABLED=false`: Langfuse 추적 비활성화 (데이터 전송 안 함)
+
+**참고**: `LANGFUSE_ENABLED=false`로 설정하면 Langfuse로 데이터가 전송되지 않으므로, 개발 중 비용을 절감할 수 있습니다.
 
 자세한 설정 방법은 [LANGFUSE_SETUP.md](./LANGFUSE_SETUP.md)를 참조하세요.
 

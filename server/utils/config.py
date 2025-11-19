@@ -1,6 +1,7 @@
 # server/utils/config.py
 
 import os
+from pathlib import Path
 from typing import List
 
 from dotenv import load_dotenv
@@ -10,9 +11,16 @@ from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 from langfuse import Langfuse
 from langfuse.langchain import CallbackHandler
 
-# .env 파일 로드
-# - server/.env 를 기본으로 읽습니다.
-load_dotenv()
+# server/.env 를 우선 로드하되, 기존처럼 상위 디렉터리(.env)도 함께 로드
+BASE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BASE_DIR.parent
+SERVER_ENV_PATH = BASE_DIR / ".env"
+ROOT_ENV_PATH = PROJECT_ROOT / ".env"
+
+# 기존 load_dotenv() 기본 검색 경로 → 프로젝트 루트 → server 디렉터리 순으로 병합
+load_dotenv(override=False)
+load_dotenv(dotenv_path=ROOT_ENV_PATH, override=False)
+load_dotenv(dotenv_path=SERVER_ENV_PATH, override=False)
 
 # SSL 검증 비활성화 (Langfuse 연결 시 SSL 인증서 검증 오류 방지)
 # OpenTelemetry exporter가 사용하는 모든 레벨에서 SSL 검증 비활성화
@@ -145,6 +153,7 @@ class Settings(BaseSettings):
     AOAI_EMBEDDING_DEPLOYMENT: str
 
     # ---------- Langfuse (선택) ----------
+    LANGFUSE_ENABLED: bool = True  # Langfuse 활성/비활성 플래그 (기본값: True)
     LANGFUSE_PUBLIC_KEY: str | None = None
     LANGFUSE_SECRET_KEY: str | None = None
     LANGFUSE_HOST: str | None = None
@@ -162,7 +171,7 @@ class Settings(BaseSettings):
     SQLALCHEMY_DATABASE_URI: str | None = None
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=[str(SERVER_ENV_PATH), str(ROOT_ENV_PATH)],
         case_sensitive=True,
         extra="ignore",
     )
@@ -233,8 +242,12 @@ class Settings(BaseSettings):
         """
         Langfuse CallbackHandler 반환.
         - session_id 는 LangGraph / LangChain run 의 config에 전달해야 함.
-        - Langfuse 설정이 없으면 None 반환.
+        - Langfuse 설정이 없거나 LANGFUSE_ENABLED=False 이면 None 반환.
         """
+        # Langfuse가 비활성화되어 있으면 None 반환
+        if not self.LANGFUSE_ENABLED:
+            return None
+        
         if not (self.LANGFUSE_PUBLIC_KEY and self.LANGFUSE_SECRET_KEY and self.LANGFUSE_HOST):
             return None
 
