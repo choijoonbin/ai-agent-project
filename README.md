@@ -131,37 +131,228 @@ ai-interview-agent/
 
 ## 🔄 동작 원리
 
-### 1. 워크플로우 흐름
+### 1. LangGraph 워크플로우 시각화
 
-```
-[시작]
-    ↓
-[JD Analyzer Agent]
-    ├─ JD 텍스트 분석
-    ├─ RAG로 포지션별 가이드 검색
-    └─ 요구 역량/기술/경험 추출
-    ↓
-[Resume Analyzer Agent]
-    ├─ 이력서 텍스트 분석
-    ├─ RAG로 평가 기준 검색
-    └─ 핵심 기술 스택 및 경력 요약 추출
-    ↓
-[Interviewer Agent]
-    ├─ JD 분석 결과 + 이력서 분석 결과 결합
-    ├─ RAG로 면접 질문 예시 검색
-    └─ 맞춤형 면접 질문 리스트 생성
-    ↓
-[Judge Agent]
-    ├─ 전체 면접 데이터 수집
-    ├─ RAG로 평가 기준 검색
-    └─ 최종 평가 리포트 생성 (강점/약점/점수/추천)
-    ↓
-[종료]
+다음은 AI Interview Agent의 LangGraph 워크플로우 다이어그램입니다:
+
+#### 1.1 전체 워크플로우 개요
+
+```mermaid
+graph TD
+    Start([시작]) --> JD[JD Analyzer Agent]
+    
+    JD --> JD_RAG{RAG 검색}
+    JD_RAG -->|포지션별 가이드| JD_LLM[LLM: JD 분석]
+    JD_LLM --> JD_Update[State 업데이트:<br/>jd_summary, jd_requirements]
+    JD_Update --> Resume[Resume Analyzer Agent]
+    
+    Resume --> Resume_RAG{RAG 검색}
+    Resume_RAG -->|평가 기준| Resume_LLM[LLM: 이력서 분석]
+    Resume_LLM --> Resume_Update[State 업데이트:<br/>candidate_summary, candidate_skills]
+    Resume_Update --> Interview[Interviewer Agent]
+    
+    Interview --> Interview_RAG{RAG 검색}
+    Interview_RAG -->|면접 질문 예시| Interview_LLM[LLM: 질문 생성]
+    Interview_LLM --> Interview_Update[State 업데이트:<br/>qa_history]
+    Interview_Update --> Judge[Judge Agent]
+    
+    Judge --> Judge_RAG{RAG 검색}
+    Judge_RAG -->|평가 기준| Judge_LLM[LLM: 최종 평가]
+    Judge_LLM --> Judge_Update[State 업데이트:<br/>evaluation]
+    Judge_Update --> End([종료])
+    
+    style JD fill:#e1f5ff
+    style Resume fill:#e1f5ff
+    style Interview fill:#e1f5ff
+    style Judge fill:#e1f5ff
+    style JD_RAG fill:#fff4e1
+    style Resume_RAG fill:#fff4e1
+    style Interview_RAG fill:#fff4e1
+    style Judge_RAG fill:#fff4e1
+    style Start fill:#e8f5e9
+    style End fill:#ffebee
 ```
 
-### 2. 상태 관리 (State Management)
+#### 1.2 상세 Agent 워크플로우 (LangGraph 스타일)
+
+각 Agent의 내부 동작을 상세히 보여주는 다이어그램입니다:
+
+```mermaid
+graph TD
+    subgraph "AI Interview Agent Workflow using LangGraph"
+        Start([시작:<br/>JD + 이력서 입력]) --> JD_Node[JD Analyzer Node]
+        
+        JD_Node --> JD_RAG[Vectorstore Retrieve<br/>포지션별 가이드 검색]
+        JD_RAG --> JD_LLM[Create JD Analysis LLM]
+        JD_LLM --> JD_State[Update State:<br/>jd_summary<br/>jd_requirements]
+        JD_State --> Resume_Node[Resume Analyzer Node]
+        
+        Resume_Node --> Resume_RAG[Vectorstore Retrieve<br/>평가 기준 검색]
+        Resume_RAG --> Resume_LLM[Create Resume Analysis LLM]
+        Resume_LLM --> Resume_State[Update State:<br/>candidate_summary<br/>candidate_skills]
+        Resume_State --> Interview_Node[Interviewer Node]
+        
+        Interview_Node --> Interview_RAG[Vectorstore Retrieve<br/>면접 질문 예시 검색]
+        Interview_RAG --> Interview_LLM[Create Questions LLM]
+        Interview_LLM --> Interview_State[Update State:<br/>qa_history]
+        Interview_State --> Judge_Node[Judge Node]
+        
+        Judge_Node --> Judge_RAG[Vectorstore Retrieve<br/>평가 기준 검색]
+        Judge_RAG --> Judge_LLM[Create Evaluation LLM]
+        Judge_LLM --> Judge_State[Update State:<br/>evaluation]
+        Judge_State --> End([종료:<br/>최종 평가 결과])
+        
+        style JD_Node fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+        style Resume_Node fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+        style Interview_Node fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+        style Judge_Node fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+        
+        style JD_RAG fill:#fff4e1,stroke:#e65100,stroke-width:2px
+        style Resume_RAG fill:#fff4e1,stroke:#e65100,stroke-width:2px
+        style Interview_RAG fill:#fff4e1,stroke:#e65100,stroke-width:2px
+        style Judge_RAG fill:#fff4e1,stroke:#e65100,stroke-width:2px
+        
+        style JD_LLM fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+        style Resume_LLM fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+        style Interview_LLM fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+        style Judge_LLM fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+        
+        style JD_State fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+        style Resume_State fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+        style Interview_State fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+        style Judge_State fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+        
+        style Start fill:#c8e6c9,stroke:#1b5e20,stroke-width:3px
+        style End fill:#ffcdd2,stroke:#b71c1c,stroke-width:3px
+    end
+```
+
+#### 1.3 RAG 통합 상세 흐름
+
+각 Agent 내부의 RAG 검색 과정을 상세히 보여주는 다이어그램입니다:
+
+```mermaid
+graph TD
+    subgraph "Agent 내부 RAG 프로세스"
+        Agent[Agent 실행] --> Query[쿼리 생성<br/>예: 포지션별 가이드]
+        Query --> FAISS[FAISS Vectorstore<br/>유사도 검색 Top-K]
+        FAISS --> Docs[관련 문서 검색<br/>knowledge_base/]
+        Docs --> Context[컨텍스트 구성<br/>문서 내용 결합]
+        Context --> Prompt[LLM 프롬프트 생성<br/>System + User + Context]
+        Prompt --> LLM[LLM 호출<br/>Azure OpenAI]
+        LLM --> Parse[결과 파싱<br/>구조화된 데이터 추출]
+        Parse --> Update[State 업데이트<br/>InterviewState]
+        Update --> Next[다음 Agent로 전달]
+    end
+    
+    style Agent fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    style FAISS fill:#fff4e1,stroke:#e65100,stroke-width:2px
+    style LLM fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style Update fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+```
+
+### 2. 워크플로우 상세 설명
+
+#### 2.1 JD Analyzer Agent
+- **입력**: JD 텍스트, Job Title
+- **RAG 검색**: 포지션별 채용 가이드 및 요구 역량 문서
+- **LLM 처리**: JD 분석 및 요구사항 추출
+- **출력**: `jd_summary`, `jd_requirements` (State에 저장)
+
+#### 2.2 Resume Analyzer Agent
+- **입력**: 이력서 텍스트, JD 분석 결과
+- **RAG 검색**: 이력서 평가 기준 및 인터뷰 팁 문서
+- **LLM 처리**: 이력서 분석 및 JD 매칭 평가
+- **출력**: `candidate_summary`, `candidate_skills` (State에 저장)
+
+#### 2.3 Interviewer Agent
+- **입력**: JD 분석 결과, 이력서 분석 결과
+- **RAG 검색**: 면접 질문 예시 및 평가 기준 문서
+- **LLM 처리**: 맞춤형 면접 질문 리스트 생성
+- **출력**: `qa_history` (질문 리스트, State에 저장)
+
+#### 2.4 Judge Agent
+- **입력**: 전체 면접 데이터 (JD, 이력서, 질문-답변)
+- **RAG 검색**: 채용 평가 기준 및 역량 정의 문서
+- **LLM 처리**: 최종 평가 리포트 생성
+- **출력**: `evaluation` (강점/약점/점수/추천, State에 저장)
+
+### 3. RAG 통합 워크플로우
+
+각 에이전트는 RAG(Retrieval Augmented Generation)를 통해 지식 베이스를 활용합니다:
+
+```mermaid
+graph LR
+    Agent[에이전트] --> Query[쿼리 생성]
+    Query --> FAISS[FAISS 벡터 스토어]
+    FAISS --> Search[유사도 검색<br/>Top-K 문서]
+    Search --> Context[컨텍스트 구성]
+    Context --> LLM[LLM 프롬프트에<br/>컨텍스트 포함]
+    LLM --> Result[결과 생성]
+    Result --> State[State 업데이트]
+    
+    KnowledgeBase[지식 베이스<br/>knowledge_base/] --> Embed[임베딩 생성]
+    Embed --> FAISS
+    
+    style Agent fill:#e1f5ff
+    style FAISS fill:#fff4e1
+    style LLM fill:#e8f5e9
+    style KnowledgeBase fill:#f3e5f5
+```
+
+### 4. 상태 관리 (State Management)
 
 **LangGraph**는 `InterviewState`라는 공유 상태 객체를 통해 모든 에이전트 간 데이터를 공유합니다:
+
+#### 4.1 State 공유 흐름도
+
+```mermaid
+graph LR
+    subgraph "InterviewState 공유 상태"
+        State[InterviewState<br/>공유 상태 객체]
+    end
+    
+    subgraph "Agent 1: JD Analyzer"
+        JD_Read[State 읽기:<br/>jd_text, job_title] --> JD_Process[처리]
+        JD_Process --> JD_Write[State 쓰기:<br/>jd_summary, jd_requirements]
+    end
+    
+    subgraph "Agent 2: Resume Analyzer"
+        Resume_Read[State 읽기:<br/>resume_text, jd_summary] --> Resume_Process[처리]
+        Resume_Process --> Resume_Write[State 쓰기:<br/>candidate_summary, candidate_skills]
+    end
+    
+    subgraph "Agent 3: Interviewer"
+        Interview_Read[State 읽기:<br/>jd_summary, candidate_summary] --> Interview_Process[처리]
+        Interview_Process --> Interview_Write[State 쓰기:<br/>qa_history]
+    end
+    
+    subgraph "Agent 4: Judge"
+        Judge_Read[State 읽기:<br/>전체 데이터] --> Judge_Process[처리]
+        Judge_Process --> Judge_Write[State 쓰기:<br/>evaluation]
+    end
+    
+    State <--> JD_Read
+    JD_Write --> State
+    State <--> Resume_Read
+    Resume_Write --> State
+    State <--> Interview_Read
+    Interview_Write --> State
+    State <--> Judge_Read
+    Judge_Write --> State
+    
+    style State fill:#f3e5f5,stroke:#6a1b9a,stroke-width:3px
+    style JD_Read fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    style JD_Write fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    style Resume_Read fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    style Resume_Write fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    style Interview_Read fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    style Interview_Write fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    style Judge_Read fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    style Judge_Write fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+```
+
+#### 4.2 State 구조
 
 ```python
 class InterviewState(TypedDict):
@@ -192,7 +383,7 @@ class InterviewState(TypedDict):
 
 각 에이전트는 이 상태를 읽고 업데이트하면서 순차적으로 작업을 수행합니다.
 
-### 3. RAG (Retrieval Augmented Generation)
+### 5. RAG (Retrieval Augmented Generation)
 
 각 에이전트는 필요에 따라 FAISS 벡터 스토어에서 유사한 문서를 검색하여 컨텍스트로 활용합니다:
 
@@ -202,7 +393,7 @@ class InterviewState(TypedDict):
 4. **FAISS 인덱싱**: 벡터를 FAISS 인덱스로 저장
 5. **유사도 검색**: 쿼리와 유사한 상위 k개 문서 검색
 
-### 4. Langfuse 통합
+### 6. Langfuse 통합
 
 모든 LLM 호출은 **Langfuse CallbackHandler**를 통해 자동으로 추적됩니다:
 

@@ -308,15 +308,59 @@ def render_run_tab():
                         st.session_state["run_tab_state"]["qa_history"][i]["answer"] = new_answer
                     state["qa_history"][i]["answer"] = new_answer
         
-        # 탭으로 결과 표시
-        tab1, tab2, tab3 = st.tabs(
-            ["📊 평가 결과", "💬 인터뷰 질문 (답변/재평가)", "📦 원시 상태 데이터"]
+        # 탭 선택 상태를 세션 상태에 저장하여 유지
+        # 답변 입력란 클릭 시에도 현재 탭이 유지되도록 함
+        tab_key = f"run_tab_selected_{interview_id}"
+        if tab_key not in st.session_state:
+            st.session_state[tab_key] = 1  # 기본값은 인터뷰 질문 탭 (인덱스 1)
+        
+        # 탭 선택 UI (st.radio를 사용하여 명시적으로 상태 관리)
+        tab_options = [
+            "📊 평가 결과",
+            "💬 인터뷰 질문 (답변/재평가)",
+            "📦 원시 상태 데이터"
+        ]
+        
+        # 현재 선택된 탭 인덱스 가져오기
+        current_index = st.session_state.get(tab_key, 1)
+        if current_index >= len(tab_options):
+            current_index = 1
+        
+        # CSS를 사용하여 라디오 버튼을 탭처럼 보이게 스타일링
+        st.markdown("""
+        <style>
+        .stRadio > div {
+            display: flex;
+            gap: 10px;
+        }
+        .stRadio > div > label {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        selected_tab = st.radio(
+            "결과 보기",
+            options=tab_options,
+            index=current_index,
+            horizontal=True,
+            key=f"tab_radio_{interview_id}",
+            label_visibility="collapsed"
         )
-
-        with tab1:
+        
+        # 선택된 탭 인덱스를 세션 상태에 저장
+        selected_index = tab_options.index(selected_tab)
+        st.session_state[tab_key] = selected_index
+        
+        # 선택된 탭에 따라 내용 표시
+        if selected_tab == "📊 평가 결과":
             render_evaluation(state)
-
-        with tab2:
+        elif selected_tab == "💬 인터뷰 질문 (답변/재평가)":
             render_questions(
                 state,
                 interview_id=interview_id,
@@ -324,8 +368,7 @@ def render_run_tab():
                 enable_edit=True,
                 update_session_state=True,
             )
-
-        with tab3:
+        elif selected_tab == "📦 원시 상태 데이터":
             st.json(state)
 
 
