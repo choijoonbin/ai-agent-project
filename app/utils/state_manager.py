@@ -3,19 +3,33 @@
 import streamlit as st
 
 
-def init_app_session_state():
+def init_app_session_state() -> None:
     """
     Streamlit rerun마다 공통 세션 키들을 한 번에 초기화/보정하는 유틸.
+    - 각 탭/화면에서 중복으로 if "xxx" not in ... 체크하던 코드들을 모아둠.
     """
     defaults = {
+        # 인터뷰 옵션
         "cfg_enable_rag": True,
         "cfg_use_mini": True,
         "cfg_total_questions": 5,
+
+        # UI 모드
+        "cfg_theme_mode": "시스템 기본",
+
+        # 네비게이션 (사이드바 상단 메뉴)
+        "nav_selected": "Studio",
+
+        # 실행 중 인터뷰 상태
         "run_tab_state": None,
         "run_tab_interview_id": None,
+        "last_interview_id": None,
+
+        # 히스토리 화면
         "history_selected_id": None,
-        "last_interview_id": None,  # 마지막으로 실행한 인터뷰 ID
-        "cfg_theme_mode": "시스템 기본",
+
+        # 사이드바 설정 접기/펼치기
+        "sidebar_settings_open": True,
     }
 
     for k, v in defaults.items():
@@ -23,12 +37,14 @@ def init_app_session_state():
             st.session_state[k] = v
 
 
-def apply_theme_css():
+def apply_theme_css() -> None:
     """
-    cfg_theme_mode 값에 따라 전체적인 톤 + 사이드바를 살짝 다르게 스타일링.
+    cfg_theme_mode 값에 따라 전체적인 톤 + 사이드바를 스타일링.
+    실제로는 <style> 태그 하나만 주입하고, 내용은 화면에 노출되지 않도록 한다.
     """
     mode = st.session_state.get("cfg_theme_mode", "시스템 기본")
 
+    # 🔹 공통 CSS
     base_css = """
     /* 사이드바 전체 래퍼 */
     [data-testid="stSidebar"] {
@@ -70,6 +86,7 @@ def apply_theme_css():
     }
     """
 
+    # 🔹 모드별 추가 CSS
     if mode == "라이트":
         tone_css = """
         [data-testid="stSidebar"] {
@@ -97,6 +114,7 @@ def apply_theme_css():
         }
         """
     else:
+        # 시스템 기본
         tone_css = """
         .sidebar-card {
             background: rgba(15, 23, 42, 0.92);

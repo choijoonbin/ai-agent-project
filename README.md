@@ -46,6 +46,11 @@ AI 기반 자동화 면접 시스템으로, 채용 공고(JD)와 지원자 이�
 - 이력 조회 및 재평가 기능 제공
 - Streamlit UI를 통한 직관적인 인터페이스
 
+### 5. 인터랙티브 Streamlit UI & 파일 라이브러리
+- 사이드바 네비게이션(Overview / Studio / History / Insights / Settings)로 페이지 전환
+- Studio 페이지에서 JD/이력서를 직접 입력하거나 **서버의 문서 라이브러리(docx/pdf/md/txt)**에서 불러오기
+- Insights 페이지에서 저장된 면접 정보를 기반으로 Soft-landing 플랜, 기여도/리스크 차트 등 후보자 인사이트 확인
+
 ### 5. 모듈화된 UI 컴포넌트
 - **컴포넌트 기반 아키텍처**: 재사용 가능한 UI 컴포넌트로 구성
   - `candidate_form.py`: 면접 실행 탭 (JD/이력서 입력, 면접 실행)
@@ -63,11 +68,14 @@ ai-interview-agent/
 ├── app/                          # Streamlit 프론트엔드
 │   ├── main.py                  # 메인 Streamlit 앱 (컴포넌트 조합)
 │   ├── components/              # UI 컴포넌트 모듈
-│   │   ├── __init__.py         # 패키지 초기화
-│   │   ├── candidate_form.py   # 면접 실행 탭 (지원자 정보 입력 폼)
-│   │   ├── history_panel.py    # 면접 이력 조회 패널
-│   │   ├── interview_chat.py   # 면접 채팅 인터페이스 (평가 결과, 질문 렌더링)
-│   │   └── sidebar.py          # 사이드바 설정 (UI 모드, 인터뷰 옵션)
+│   │   ├── __init__.py
+│   │   ├── overview.py         # 대시보드(Overview) 페이지
+│   │   ├── candidate_form.py   # 면접 실행 (Studio) + 파일 라이브러리
+│   │   ├── history_panel.py    # 면접 이력 조회/재평가
+│   │   ├── interview_chat.py   # 질문/답변 트리 렌더링
+│   │   ├── insights.py         # 후보자 인사이트 페이지
+│   │   ├── settings_page.py    # 설정/플레이스홀더 화면
+│   │   └── sidebar.py          # 네비게이션 & 설정 사이드바
 │   ├── utils/                   # 유틸리티 모듈
 │   │   ├── __init__.py         # 패키지 초기화
 │   │   ├── state_manager.py    # 세션 상태 관리 및 테마 CSS
@@ -95,8 +103,9 @@ ai-interview-agent/
 │   │   └── tools.py            # RAG 유틸리티
 │   │
 │   ├── routers/                 # FastAPI 라우터
-│   │   ├── workflow.py         # 워크플로우 실행 API
-│   │   └── history.py          # 면접 이력 조회 API
+│   │   ├── workflow.py         # 워크플로우 실행/재평가 API
+│   │   ├── history.py          # 면접 이력 조회 API
+│   │   └── files.py            # JD/이력서 파일 목록 & 본문 API
 │   │
 │   ├── db/                      # 데이터베이스
 │   │   ├── database.py         # DB 연결 설정
@@ -104,7 +113,8 @@ ai-interview-agent/
 │   │   └── schemas.py          # Pydantic 스키마
 │   │
 │   ├── utils/                   # 유틸리티
-│   │   └── config.py           # 설정 관리 (LLM, Langfuse 등)
+│   │   ├── config.py           # 설정 관리 (LLM, Langfuse 등)
+│   │   └── doc_loader.py       # 문서 로딩/파싱 헬퍼 (txt/md/pdf/docx)
 │   │
 │   └── data/                    # 데이터 파일
 │       ├── knowledge_base/      # RAG용 지식 베이스 문서
@@ -671,23 +681,29 @@ python3 test_langfuse.py
 
 ```
 app/
-├── main.py                    # 앱 진입점, 컴포넌트 조합
-├── components/               # UI 컴포넌트
-│   ├── sidebar.py           # 사이드바 (UI 모드, 인터뷰 옵션)
-│   ├── candidate_form.py    # 면접 실행 탭
-│   ├── interview_chat.py     # 질문/답변 및 평가 렌더링
-│   └── history_panel.py     # 면접 이력 조회
-└── utils/                    # 공통 유틸리티
-    ├── state_manager.py      # 세션 상태 관리, 테마 CSS
-    └── api_client.py         # 백엔드 API 호출
+├── main.py                    # 앱 진입점, 네비게이션 조합
+├── components/
+│   ├── sidebar.py            # 사이드바 (메뉴 + 설정)
+│   ├── overview.py           # Overview(대시보드) 페이지
+│   ├── candidate_form.py     # Studio 페이지 + 파일 라이브러리
+│   ├── interview_chat.py      # 질문/답변 및 평가 렌더링
+│   ├── history_panel.py      # 면접 이력 조회/재평가
+│   ├── insights.py           # Insights 페이지 (Soft-landing, 차트)
+│   └── settings_page.py      # 향후 확장용 설정 페이지
+└── utils/
+    ├── state_manager.py       # 세션 상태 관리, 테마 CSS
+    └── api_client.py          # 백엔드 API 호출
 ```
 
 ### 컴포넌트 역할
 
 - **`main.py`**: Streamlit 앱의 진입점으로, 페이지 설정 및 컴포넌트 조합을 담당
-- **`components/sidebar.py`**: UI 모드 선택, RAG 활성화, 질문 개수 등 설정 제공
-- **`components/candidate_form.py`**: JD/이력서 입력 폼 및 면접 실행 로직
+- **`components/sidebar.py`**: 네비게이션/설정 UI, RAG 옵션, 질문 개수 등 제어
+- **`components/overview.py`**: 대시보드 소개 및 빠른 액션(Studio/History 이동)
+- **`components/candidate_form.py`**: Studio 화면, JD/이력서 텍스트 입력 + 파일 라이브러리, 면접 실행
 - **`components/interview_chat.py`**: 질문/답변 트리 구조 렌더링, 평가 결과 표시
-- **`components/history_panel.py`**: 면접 이력 목록 조회 및 상세 보기
+- **`components/history_panel.py`**: 면접 이력 목록 조회, 상세/재평가 UI
+- **`components/insights.py`**: 후보자 인사이트(Soft-landing, 기여도/리스크 차트) 생성 및 표시
+- **`components/settings_page.py`**: 시스템 설정/추후 확장용 플레이스홀더
 - **`utils/state_manager.py`**: Streamlit 세션 상태 초기화 및 테마 CSS 적용
 - **`utils/api_client.py`**: 백엔드 API 호출 함수 (면접 실행, 재평가, 후속 질문 등)
