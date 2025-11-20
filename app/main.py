@@ -2,11 +2,14 @@
 
 import os
 import json
+import base64
+from io import BytesIO
 import requests
 
 import streamlit as st
 from dotenv import load_dotenv
-
+import html  # JD 텍스트 HTML 이스케이프용
+from PIL import Image
 # app/.env 로드
 load_dotenv()
 
@@ -14,6 +17,32 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:9898/api/v1")
 
 
 # ---------- API 호출 함수들 ---------- #
+
+@st.cache_data(show_spinner=False)
+def _render_header_process_image(
+    path: str,
+    *,
+    max_height: int = 280,
+) -> None:
+    image = Image.open(path)
+    width, height = image.size
+    scaling = max_height / height
+    new_size = (int(width * scaling), max_height)
+    resized = image.resize(new_size, Image.LANCZOS)
+
+    buffer = BytesIO()
+    resized.save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    img_html = f"""
+    <div class="hero-image-wrapper" style="max-width:520px; margin-left:0;">
+        <img
+            src="data:image/png;base64,{encoded}"
+            style="width:100%; max-height:{max_height}px; object-fit:contain; display:block; margin:0;"
+        />
+    </div>
+    """
+    st.markdown(img_html, unsafe_allow_html=True)
 
 def call_interview_api(
     job_title: str,
@@ -169,7 +198,6 @@ def render_questions(
 
     - qa_history 는 평면 리스트지만,
       화면에서는 "부모 질문 → 그 아래 들여쓰기된 후속질문들" 형태로 표시.
-    - 인터랙션(답변, 후속질문 생성, 재평가)은 기존과 동일하게 동작.
     """
     st.subheader("💬 인터뷰 세션 (질문 & 답변)")
 
@@ -224,29 +252,33 @@ def render_questions(
         is_followup = bool(turn.get("is_followup", False))
         parent_index = turn.get("parent_index")
 
-        # 들여쓰기(레벨별 좌측 마진) – 질문 헤더에만 적용
+        # ---- 트리 형태 텍스트 prefix + 들여쓰기 ---- #
         indent_px = level * 24
+        if level <= 0:
+            tree_prefix = ""
+        else:
+            # 레벨에 따라 간단한 트리 표시 (└──, └──── 등)
+            tree_prefix = "└" + "─" * (2 * level - 1) + " "
+
+        if is_followup:
+            if parent_index is not None:
+                parent_label = f"(Q{(parent_index or 0) + 1}의 후속 질문)"
+            else:
+                parent_label = "(후속 질문)"
+            header_html = (
+                f"<div style='margin-left:{indent_px}px'>"
+                f"<strong>{tree_prefix}Q{display_no}. 🔁 {category} {parent_label}</strong>"
+                f"</div>"
+            )
+        else:
+            header_html = (
+                f"<div style='margin-left:{indent_px}px'>"
+                f"<strong>{tree_prefix}Q{display_no}. ({category})</strong>"
+                f"</div>"
+            )
 
         with st.container(border=True):
-            # ---- 헤더 (Qn + 카테고리 + 후속표시) ---- #
-            if is_followup:
-                parent_label = (
-                    f"(Q{(parent_index or 0) + 1}의 후속 질문)"
-                    if parent_index is not None
-                    else "(후속 질문)"
-                )
-                header_html = (
-                    f"<div style='margin-left:{indent_px}px'>"
-                    f"<strong>Q{display_no}. 🔁 {category} {parent_label}</strong>"
-                    f"</div>"
-                )
-            else:
-                header_html = (
-                    f"<div style='margin-left:{indent_px}px'>"
-                    f"<strong>Q{display_no}. ({category})</strong>"
-                    f"</div>"
-                )
-
+            # ---- 헤더 (Qn + 카테고리 + 트리표시) ---- #
             st.markdown(header_html, unsafe_allow_html=True)
 
             # ---- 질문/답변 2열 레이아웃 ---- #
@@ -323,17 +355,16 @@ def render_questions(
                                             and "run_tab_state" in st.session_state
                                             and st.session_state["run_tab_state"] is not None
                                         ):
-                                            # 실행 중인 세션의 qa_history 에만 한 번 append
-                                            st.session_state["run_tab_state"]["qa_history"].append(
-                                                new_turn
-                                            )
+                                            # run_tab_state 안에 qa_history가 없으면 방어적으로 초기화
+                                            if "qa_history" not in st.session_state["run_tab_state"]:
+                                                st.session_state["run_tab_state"]["qa_history"] = []
+
+                                            st.session_state["run_tab_state"]["qa_history"].append(new_turn)
                                             qa_history = st.session_state["run_tab_state"]["qa_history"]
                                         else:
-                                            # 이력 탭에서 보는 경우 등은 현재 state 의 qa_history 에만 append
                                             qa_history = state.get("qa_history", [])
                                             qa_history.append(new_turn)
 
-                                        # 화면에서 사용하는 state 도 동일 리스트를 바라보게 동기화
                                         state["qa_history"] = qa_history
 
                                         st.success("후속 질문이 이 질문 아래에 추가되었습니다.")
@@ -365,7 +396,6 @@ def render_questions(
                 render_node(child, level + 1)
 
     # ---------- 4) 루트 노드부터 전체 트리 렌더링 ---------- #
-    # roots 는 원래 인덱스 순서대로 들어 있으므로, 전체 흐름도 시간 순서를 대략 유지합니다.
     for root in roots:
         render_node(root, level=0)
 
@@ -404,10 +434,15 @@ def render_questions(
                 render_evaluation(new_state)
 
 
+
+
 # ---------- 개별 화면 렌더링 ---------- #
 
 def render_run_tab():
     """면접 실행 탭"""
+
+    # 혹시 main() 외부에서 직접 호출되더라도 세션 기본값이 보장되도록 안전장치
+    init_app_session_state()
 
     col_left, col_right = st.columns(2)
 
@@ -432,10 +467,10 @@ def render_run_tab():
             placeholder="지원자의 이력서 내용을 텍스트로 붙여넣으세요.",
         )
 
-    if "run_tab_state" not in st.session_state:
-        st.session_state["run_tab_state"] = None
-    if "run_tab_interview_id" not in st.session_state:
-        st.session_state["run_tab_interview_id"] = None
+    # if "run_tab_state" not in st.session_state:
+    #     st.session_state["run_tab_state"] = None
+    # if "run_tab_interview_id" not in st.session_state:
+    #     st.session_state["run_tab_interview_id"] = None
 
     if st.button("🚀 AI 면접 에이전트 실행", use_container_width=True):
         if not jd_text.strip() or not resume_text.strip():
@@ -533,15 +568,20 @@ def render_run_tab():
 def render_history_tab():
     """면접 이력 조회 탭"""
 
-    st.subheader("📚 면접 이력")
+    # 개별 호출 시에도 상태 키가 존재하도록 보정
+    init_app_session_state()
 
-    # 어떤 이력을 펼쳐서 보고 있는지 저장 (없으면 None)
-    if "history_selected_id" not in st.session_state:
-        st.session_state["history_selected_id"] = None
+    st.subheader("📚 면접 이력")
 
     col1, col2 = st.columns([1, 1])
     with col1:
         if st.button("🔄 이력 새로고침", use_container_width=True):
+            # 선택/캐시 모두 초기화
+            selected_id = st.session_state.get("history_selected_id")
+            if selected_id is not None:
+                cache_key = f"history_state_{selected_id}"
+                if cache_key in st.session_state:
+                    del st.session_state[cache_key]
             st.session_state["history_selected_id"] = None
             st.rerun()
 
@@ -564,28 +604,64 @@ def render_history_tab():
         total_questions = item["total_questions"]
         status = item["status"]
 
+        cache_key = f"history_state_{interview_id}"
+
         with st.container(border=True):
             # --- 카드 헤더 영역 --- #
             st.markdown(f"#### {title} - {name}")
-            st.caption(f"🗓 {created_at} | 질문 수(초기): {total_questions} | 상태: {status}")
+            st.caption(
+                f"🗓 {created_at} | 질문 수(초기): {total_questions} | 상태: {status}"
+            )
 
             col_a, col_b = st.columns([3, 1])
 
+            # ----- JD 영역: 펼치기 / 접기 토글 ----- #
             with col_a:
-                jd_preview = item.get("jd_text", "") or ""
-                if len(jd_preview) > 250:
-                    jd_preview = jd_preview[:250] + "..."
-                st.text_area(
-                    "JD (요약 보기용)",
-                    value=jd_preview,
-                    height=80,
-                    disabled=True,
-                    label_visibility="collapsed",
-                    key=f"jd_preview_{interview_id}",
-                )
+                jd_full = item.get("jd_text", "") or ""
 
+                jd_expanded_key = f"history_jd_expanded_{interview_id}"
+                if jd_expanded_key not in st.session_state:
+                    st.session_state[jd_expanded_key] = False
+
+                is_jd_expanded = st.session_state[jd_expanded_key]
+
+                if is_jd_expanded:
+                    display_text = jd_full
+                else:
+                    if len(jd_full) > 250:
+                        display_text = jd_full[:250] + "..."
+                    else:
+                        display_text = jd_full
+
+                safe_text = html.escape(display_text)
+                max_height = "none" if is_jd_expanded else "80px"
+
+                jd_box_html = f"""
+                <div style="
+                    background-color: rgba(255,255,255,0.02);
+                    padding: 10px;
+                    border-radius: 6px;
+                    border: 1px solid rgba(255,255,255,0.1);
+                    max-height: {max_height};
+                    overflow-y: auto;
+                    font-size: 0.85rem;
+                ">
+                    <pre style="white-space: pre-wrap; margin: 0;">{safe_text}</pre>
+                </div>
+                """
+                st.markdown(jd_box_html, unsafe_allow_html=True)
+
+                toggle_label = "▲ JD 접기" if is_jd_expanded else "▼ JD 전체 보기"
+                if st.button(
+                    toggle_label,
+                    key=f"jd_toggle_{interview_id}",
+                    use_container_width=True,
+                ):
+                    st.session_state[jd_expanded_key] = not is_jd_expanded
+                    st.rerun()
+
+            # ----- 이력 상세 열기 / 닫기 버튼 ----- #
             with col_b:
-                # 이미 열려 있으면 버튼 라벨을 "닫기"로
                 is_open = selected_id == interview_id
                 btn_label = "✖ 닫기" if is_open else "👀 이력 보기"
 
@@ -594,10 +670,19 @@ def render_history_tab():
                     key=f"toggle_{interview_id}",
                     use_container_width=True,
                 ):
-                    # 같은 걸 다시 누르면 접기, 다른 걸 누르면 그걸로 교체
                     if is_open:
+                        # 접기: 선택 해제 + 캐시 삭제
                         st.session_state["history_selected_id"] = None
+                        if cache_key in st.session_state:
+                            del st.session_state[cache_key]
                     else:
+                        # 새로 열기: 이전 선택/캐시 정리 후 선택
+                        prev_id = st.session_state.get("history_selected_id")
+                        if prev_id is not None and prev_id != interview_id:
+                            prev_cache_key = f"history_state_{prev_id}"
+                            if prev_cache_key in st.session_state:
+                                del st.session_state[prev_cache_key]
+
                         st.session_state["history_selected_id"] = interview_id
                     st.rerun()
 
@@ -607,36 +692,178 @@ def render_history_tab():
                 if not detail:
                     st.error("선택한 이력 정보를 불러오지 못했습니다.")
                 else:
-                    try:
-                        state = json.loads(detail.get("state_json", "{}"))
-                    except json.JSONDecodeError:
-                        st.error("저장된 state_json을 파싱할 수 없습니다.")
-                        state = {}
+                    # ✅ 이력 상세 state는 한번 읽어온 후 세션에 캐시해서 사용
+                    if cache_key in st.session_state:
+                        state = st.session_state[cache_key]
+                    else:
+                        try:
+                            state = json.loads(detail.get("state_json", "{}"))
+                        except json.JSONDecodeError:
+                            st.error("저장된 state_json을 파싱할 수 없습니다.")
+                            state = {}
+                        # 최초 로딩 시 캐시에 저장 (이후 편집/후속질문은 이 state를 수정)
+                        st.session_state[cache_key] = state
 
                     st.markdown("---")
-                    st.markdown(
-                        f"##### 📄 선택한 이력 상세 (ID: {interview_id})  \n"
-                        f"**{detail.get('job_title', '')} - {detail.get('candidate_name', '')}**"
-                    )
 
-                    tab1, tab2, tab3 = st.tabs(
-                        ["📊 평가 결과", "💬 인터뷰 질문 (답변/재평가)", "📦 원시 상태 데이터"]
-                    )
+                    with st.container(border=True):
+                        header_col_left, header_col_right = st.columns([4, 1])
 
-                    with tab1:
-                        render_evaluation(state)
+                        with header_col_left:
+                            st.markdown(
+                                f"##### 📄 선택한 이력 상세 (ID: {interview_id})  \n"
+                                f"**{detail.get('job_title', '')} - {detail.get('candidate_name', '')}**"
+                            )
 
-                    with tab2:
-                        render_questions(
-                            state,
-                            interview_id=interview_id,
-                            session_prefix=f"history_{interview_id}",
-                            enable_edit=True,
-                            update_session_state=False,
+                        with header_col_right:
+                            if st.button(
+                                "✖ 이력 상세 닫기",
+                                key=f"close_detail_{interview_id}",
+                                use_container_width=True,
+                            ):
+                                st.session_state["history_selected_id"] = None
+                                # 이 인터뷰에 대한 캐시 삭제
+                                if cache_key in st.session_state:
+                                    del st.session_state[cache_key]
+                                st.rerun()
+
+                        tab1, tab2, tab3 = st.tabs(
+                            ["📊 평가 결과", "💬 인터뷰 질문 (답변/재평가)", "📦 원시 상태 데이터"]
                         )
 
-                    with tab3:
-                        st.json(state)
+                        with tab1:
+                            render_evaluation(state)
+
+                        with tab2:
+                            # ⚠️ 여기서 넘기는 state는 cache에 있는 dict와 동일한 객체입니다.
+                            # render_questions 안에서 qa_history를 수정하면,
+                            # 세션에 캐시된 state도 함께 수정됩니다.
+                            render_questions(
+                                state,
+                                interview_id=interview_id,
+                                session_prefix=f"history_{interview_id}",
+                                enable_edit=True,
+                                update_session_state=False,
+                            )
+
+                        with tab3:
+                            st.json(state)
+
+
+
+# ---------- 세션 상태 초기화 유틸 ---------- #
+
+def init_app_session_state():
+    """
+    Streamlit rerun마다 공통 세션 키들을 한 번에 초기화/보정하는 유틸.
+    - 각 탭/화면에서 중복으로 if "xxx" not in ... 체크하던 코드들을 모아둠.
+    """
+    defaults = {
+        "cfg_enable_rag": True,
+        "cfg_use_mini": True,
+        "cfg_total_questions": 5,
+        "run_tab_state": None,
+        "run_tab_interview_id": None,
+        "history_selected_id": None,
+        # 마지막으로 실행한 인터뷰 ID (선택 기능용)
+        "last_interview_id": None,
+        "cfg_theme_mode": "시스템 기본",
+    }
+
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+# ---------- UI 테마 / 사이드바 스타일 ---------- #
+
+def apply_theme_css():
+    """
+    cfg_theme_mode 값에 따라 전체적인 톤 + 사이드바를 살짝 다르게 스타일링.
+    실제로는 <style> 태그 하나만 주입하고, 내용은 화면에 노출되지 않도록 한다.
+    """
+    mode = st.session_state.get("cfg_theme_mode", "시스템 기본")
+
+    # 🔹 공통 CSS (여기에는 <style> 태그 넣지 않습니다)
+    base_css = """
+    /* 사이드바 전체 래퍼 */
+    [data-testid="stSidebar"] {
+        background: radial-gradient(circle at top left, rgba(96, 165, 250, 0.28), transparent),
+                    radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.2), transparent);
+        backdrop-filter: blur(14px);
+        border-right: 1px solid rgba(148, 163, 184, 0.35);
+    }
+
+    /* 사이드바 내부 패딩 정리 */
+    [data-testid="stSidebar"] > div:first-child {
+        padding-top: 1.2rem;
+    }
+
+    /* 사이드바 안의 카드 스타일 */
+    .sidebar-card {
+        border-radius: 12px;
+        padding: 0.9rem 0.85rem;
+        margin-bottom: 0.9rem;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(15, 23, 42, 0.90);
+    }
+
+    .sidebar-card h4 {
+        font-size: 0.9rem;
+        margin-bottom: 0.6rem;
+    }
+
+    /* 슬라이더 라벨 조금 압축 */
+    .sidebar-small-label {
+        font-size: 0.8rem;
+        opacity: 0.85;
+        margin-bottom: 0.2rem;
+    }
+
+    .hero-image-wrapper {
+        margin-top: -0.5rem;
+        margin-left: -2.2rem;   /* ⬅️ 더 왼쪽으로 붙이기 위해 조정 */
+    }
+    """
+
+    # 🔹 모드별 추가 CSS (여기도 <style> 없이 순수 CSS만)
+    if mode == "라이트":
+        tone_css = """
+        [data-testid="stSidebar"] {
+            background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent),
+                        radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.06), transparent);
+            backdrop-filter: blur(10px);
+        }
+        .sidebar-card {
+            background: rgba(248, 250, 252, 0.94);
+            border-color: rgba(148, 163, 184, 0.55);
+        }
+        .sidebar-card h4 {
+            color: #0f172a;
+        }
+        """
+    elif mode == "다크":
+        tone_css = """
+        [data-testid="stSidebar"] {
+            background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent),
+                        radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.25), transparent);
+        }
+        .sidebar-card {
+            background: rgba(15, 23, 42, 0.96);
+            border-color: rgba(148, 163, 184, 0.60);
+        }
+        """
+    else:
+        # 시스템 기본: 최소한의 보정만
+        tone_css = """
+        .sidebar-card {
+            background: rgba(15, 23, 42, 0.92);
+        }
+        """
+
+    # 🔹 한 번의 <style> 태그로 감싸서 주입
+    full_css = f"<style>{base_css}{tone_css}</style>"
+    st.markdown(full_css, unsafe_allow_html=True)
+
 
 
 # ---------- 메인 ---------- #
@@ -647,6 +874,19 @@ def main():
         page_icon="🧑‍💼",
         layout="wide",
     )
+
+    # ✅ 세션 상태 기본값 한 번에 초기화
+    init_app_session_state()
+
+    # ✅ 현재 설정된 UI 모드에 맞게 CSS 주입
+    apply_theme_css()
+
+    # ---------- 에이전트 전체 플로우 다이어그램 (우측 상단 배치) ---------- #
+    # hero_col, spacer_col = st.columns([0.9, 3.4])
+    # with hero_col:
+    #     _render_header_process_image("images/process.png", max_height=176)
+    # with spacer_col:
+    #     st.empty()
 
     st.title("🧑‍💼 AI Interview Agent (AI 채용 면접관)")
     st.markdown(
@@ -663,18 +903,59 @@ def main():
         """
     )
 
+
+    # ---------- 사이드바 ---------- #
     with st.sidebar:
-        st.header("⚙️ 설정")
-        enable_rag = st.checkbox("RAG 활성화", value=True)
-        use_mini = st.checkbox("경량 모델 사용(gpt-4o-mini)", value=True)
-        total_questions = st.slider(
-            "질문 개수(초기 생성 개수)", min_value=3, max_value=10, value=5
-        )
+        st.markdown("### ⚙️ AI Interview 설정")
 
-        st.session_state["cfg_enable_rag"] = enable_rag
-        st.session_state["cfg_use_mini"] = use_mini
-        st.session_state["cfg_total_questions"] = total_questions
+        # --- UI 모드 카드 ---
+        with st.container():
+            st.markdown("<div class='sidebar-card'>", unsafe_allow_html=True)
+            st.markdown("#### 🎨 UI 모드")
+            st.caption("화면 분위기를 선택하세요. (사이드바 & 카드 스타일)")
 
+            st.radio(
+                "UI 모드 선택",
+                options=["시스템 기본", "라이트", "다크"],
+                index=["시스템 기본", "라이트", "다크"].index(
+                    st.session_state.get("cfg_theme_mode", "시스템 기본")
+                ),
+                key="cfg_theme_mode",
+                horizontal=False,
+                label_visibility="collapsed",
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # --- 인터뷰/RAG 설정 카드 ---
+        with st.container():
+            st.markdown("<div class='sidebar-card'>", unsafe_allow_html=True)
+            st.markdown("#### 🤖 인터뷰 옵션")
+
+            st.checkbox(
+                "RAG 활성화",
+                key="cfg_enable_rag",
+            )
+            st.checkbox(
+                "경량 모델 사용 (gpt-4o-mini)",
+                key="cfg_use_mini",
+            )
+
+            st.markdown(
+                "<div class='sidebar-small-label'>초기 생성 질문 개수</div>",
+                unsafe_allow_html=True,
+            )
+            st.slider(
+                "질문 개수(초기 생성 개수)",
+                min_value=3,
+                max_value=10,
+                value=st.session_state["cfg_total_questions"],
+                key="cfg_total_questions",
+                label_visibility="collapsed",
+            )
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---------- 본문 탭 ---------- #
     tab_run, tab_history = st.tabs(["🚀 면접 실행", "📚 면접 이력"])
 
     with tab_run:
@@ -686,3 +967,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
