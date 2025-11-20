@@ -4,6 +4,7 @@ uvicorn[standard]>=0.24.0
 
 # Frontend
 streamlit>=1.28.0
+streamlit-extras>=0.4.0
 altair>=5.0.0
 pandas>=2.1.0
 
