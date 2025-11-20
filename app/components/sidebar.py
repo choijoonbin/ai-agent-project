@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from importlib import import_module
+from typing import Literal, Optional, Callable
 
 import streamlit as st
 
-try:
-    from streamlit_extras.option_menu import option_menu  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover - fallback when extra 패키지 미설치
-    option_menu = None
+
+def _load_option_menu() -> Optional[Callable[..., str]]:
+    """
+    streamlit-extras 설치 여부와 상관없이 안전하게 option_menu를 로드.
+    - 새로 설치 후 앱을 재시작하지 않아도 재시도되도록 매 호출 시 import 시도.
+    """
+    try:
+        module = import_module("streamlit_extras.option_menu")
+        return getattr(module, "option_menu")
+    except ModuleNotFoundError:
+        return None
 
 NavKey = Literal["overview", "studio", "history", "insights", "settings"]
 
@@ -54,6 +62,7 @@ def render_sidebar() -> NavKey:
         default_index = 1  # fallback: studio
 
     nav_options_display = ["Overview", "면접 스튜디오", "면접 이력", "인사이트", "설정"]
+    option_menu = _load_option_menu()
 
     if option_menu is not None:
         selected_label: str = option_menu(
