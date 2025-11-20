@@ -625,6 +625,20 @@ print(result["state"]["evaluation"])
 
 ## 🧪 테스트
 
+### LangGraph 워크플로우 시각화
+
+워크플로우 그래프를 시각화하여 구조를 확인할 수 있습니다:
+
+```bash
+cd server
+python workflow/visualize_graph.py
+```
+
+이 스크립트는 다음을 제공합니다:
+- **ASCII 아트**: 콘솔에 텍스트 기반 다이어그램 출력
+- **Mermaid 코드**: Mermaid 다이어그램 코드 생성 (https://mermaid.live/ 에서 시각화 가능)
+- **그래프 정보**: 노드 및 엣지 목록 출력
+
 ### Langfuse 연결 테스트
 
 ```bash
