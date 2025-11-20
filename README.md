@@ -46,19 +46,35 @@ AI 기반 자동화 면접 시스템으로, 채용 공고(JD)와 지원자 이�
 - 이력 조회 및 재평가 기능 제공
 - Streamlit UI를 통한 직관적인 인터페이스
 
+### 5. 모듈화된 UI 컴포넌트
+- **컴포넌트 기반 아키텍처**: 재사용 가능한 UI 컴포넌트로 구성
+  - `candidate_form.py`: 면접 실행 탭 (JD/이력서 입력, 면접 실행)
+  - `history_panel.py`: 면접 이력 조회 및 상세 보기
+  - `interview_chat.py`: 질문/답변 인터페이스 및 평가 결과 렌더링
+  - `sidebar.py`: 설정 사이드바 (UI 모드, RAG 옵션 등)
+- **유틸리티 모듈**: 공통 기능 분리
+  - `state_manager.py`: Streamlit 세션 상태 관리 및 테마 CSS
+  - `api_client.py`: 백엔드 API 호출 함수 모음
+
 ## 📁 프로젝트 구조
 
 ```
 ai-interview-agent/
 ├── app/                          # Streamlit 프론트엔드
-│   ├── main.py                  # 메인 Streamlit 앱
-│   ├── components/              # UI 컴포넌트
-│   │   ├── candidate_form.py   # 지원자 정보 입력 폼
-│   │   ├── history_panel.py    # 면접 이력 패널
-│   │   ├── interview_chat.py   # 면접 채팅 인터페이스
-│   │   └── sidebar.py          # 사이드바 설정
-│   └── utils/
-│       └── state_manager.py     # 세션 상태 관리
+│   ├── main.py                  # 메인 Streamlit 앱 (컴포넌트 조합)
+│   ├── components/              # UI 컴포넌트 모듈
+│   │   ├── __init__.py         # 패키지 초기화
+│   │   ├── candidate_form.py   # 면접 실행 탭 (지원자 정보 입력 폼)
+│   │   ├── history_panel.py    # 면접 이력 조회 패널
+│   │   ├── interview_chat.py   # 면접 채팅 인터페이스 (평가 결과, 질문 렌더링)
+│   │   └── sidebar.py          # 사이드바 설정 (UI 모드, 인터뷰 옵션)
+│   ├── utils/                   # 유틸리티 모듈
+│   │   ├── __init__.py         # 패키지 초기화
+│   │   ├── state_manager.py    # 세션 상태 관리 및 테마 CSS
+│   │   └── api_client.py       # API 호출 함수 (면접 실행, 재평가, 후속 질문 등)
+│   └── images/                  # 이미지 리소스
+│       ├── process.png         # 프로세스 다이어그램
+│       └── sk.png              # SK 로고
 │
 ├── server/                       # FastAPI 백엔드
 │   ├── main.py                  # FastAPI 앱 진입점
@@ -631,4 +647,33 @@ python3 test_langfuse.py
 ---
 
 **개발자**: AI Interview Agent Team  
-**버전**: 0.1.0
+**버전**: 0.2.0
+
+## 📦 컴포넌트 구조 상세
+
+### 프론트엔드 아키텍처
+
+프론트엔드는 모듈화된 컴포넌트 구조로 설계되어 유지보수성과 재사용성을 높였습니다:
+
+```
+app/
+├── main.py                    # 앱 진입점, 컴포넌트 조합
+├── components/               # UI 컴포넌트
+│   ├── sidebar.py           # 사이드바 (UI 모드, 인터뷰 옵션)
+│   ├── candidate_form.py    # 면접 실행 탭
+│   ├── interview_chat.py     # 질문/답변 및 평가 렌더링
+│   └── history_panel.py     # 면접 이력 조회
+└── utils/                    # 공통 유틸리티
+    ├── state_manager.py      # 세션 상태 관리, 테마 CSS
+    └── api_client.py         # 백엔드 API 호출
+```
+
+### 컴포넌트 역할
+
+- **`main.py`**: Streamlit 앱의 진입점으로, 페이지 설정 및 컴포넌트 조합을 담당
+- **`components/sidebar.py`**: UI 모드 선택, RAG 활성화, 질문 개수 등 설정 제공
+- **`components/candidate_form.py`**: JD/이력서 입력 폼 및 면접 실행 로직
+- **`components/interview_chat.py`**: 질문/답변 트리 구조 렌더링, 평가 결과 표시
+- **`components/history_panel.py`**: 면접 이력 목록 조회 및 상세 보기
+- **`utils/state_manager.py`**: Streamlit 세션 상태 초기화 및 테마 CSS 적용
+- **`utils/api_client.py`**: 백엔드 API 호출 함수 (면접 실행, 재평가, 후속 질문 등)
