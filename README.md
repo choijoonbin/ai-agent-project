@@ -52,12 +52,26 @@ AI 기반 자동화 면접 시스템으로, 채용 공고(JD)와 지원자 이�
 - Studio 페이지에서 JD/이력서를 직접 입력하거나 **서버의 문서 라이브러리(docx/pdf/md/txt)**에서 불러오기
 - **Insights 페이지**: 저장된 면접 정보를 기반으로 LLM이 생성한 Soft-landing 플랜, 기여도/리스크 차트, 성장 추천 등 후보자 인사이트 시각화
 
-### 5. 모듈화된 UI 컴포넌트
+### 6. 지원자 지원 시스템
+- **지원자 로그인/가입**: 이름과 생년월일로 간단한 회원가입 및 로그인
+- **채용공고 조회**: 등록된 채용공고 목록 조회 및 상세 정보 확인
+- **지원 기능**: 채용공고에 지원서 제출 (이력서 업로드, 자기소개서, MBTI 등)
+- **지원 상태 조회**: 본인의 지원 이력 및 상태 확인
+
+### 7. 로그인/인증 시스템
+- **역할 기반 접근 제어**: 지원자(NORMAL)와 관리자(ADMIN) 역할 구분
+- **세션 관리**: Streamlit 세션 상태를 통한 로그인 상태 유지
+- **자동 리다이렉트**: 로그인 상태에 따른 페이지 자동 전환
+
+### 8. 모듈화된 UI 컴포넌트
 - **컴포넌트 기반 아키텍처**: 재사용 가능한 UI 컴포넌트로 구성
+  - `login.py`: 로그인/가입 페이지 (지원자 및 관리자)
+  - `volunteer.py`: 지원자 지원 시스템 (채용공고 조회, 지원, 상태 확인)
   - `candidate_form.py`: 면접 실행 탭 (JD/이력서 입력, 면접 실행)
   - `history_panel.py`: 면접 이력 조회 및 상세 보기
   - `interview_chat.py`: 질문/답변 인터페이스 및 평가 결과 렌더링
-  - `sidebar.py`: 설정 사이드바 (UI 모드, RAG 옵션 등)
+  - `insights.py`: 후보자 인사이트 페이지 (Soft-landing, 기여도/리스크 차트)
+  - `sidebar.py`: 네비게이션 & 설정 사이드바 (UI 모드, RAG 옵션 등)
 - **유틸리티 모듈**: 공통 기능 분리
   - `state_manager.py`: Streamlit 세션 상태 관리 및 테마 CSS
   - `api_client.py`: 백엔드 API 호출 함수 모음
@@ -71,6 +85,8 @@ ai-interview-agent/
 │   ├── components/              # UI 컴포넌트 모듈
 │   │   ├── __init__.py
 │   │   ├── overview.py         # 대시보드(Overview) 페이지
+│   │   ├── login.py            # 로그인/가입 페이지 (지원자 및 관리자)
+│   │   ├── volunteer.py        # 지원자 지원 시스템 (채용공고 조회, 지원, 상태 확인)
 │   │   ├── candidate_form.py   # 면접 실행 (Studio) + 파일 라이브러리
 │   │   ├── history_panel.py    # 면접 이력 조회/재평가
 │   │   ├── interview_chat.py   # 질문/답변 트리 렌더링
@@ -108,11 +124,14 @@ ai-interview-agent/
 │   ├── routers/                 # FastAPI 라우터
 │   │   ├── workflow.py         # 워크플로우 실행/재평가 API
 │   │   ├── history.py          # 면접 이력 조회 API
-│   │   └── files.py            # JD/이력서 파일 목록 & 본문 API
+│   │   ├── files.py            # JD/이력서 파일 목록 & 본문 API
+│   │   ├── auth.py             # 인증 API (로그인/가입)
+│   │   ├── recruitments.py     # 채용공고 관리 API
+│   │   └── applications.py     # 지원 이력 관리 API
 │   │
 │   ├── db/                      # 데이터베이스
 │   │   ├── database.py         # DB 연결 설정
-│   │   ├── models.py           # SQLAlchemy 모델
+│   │   ├── models.py           # SQLAlchemy 모델 (Interview, Member, Recruitment, Application)
 │   │   └── schemas.py          # Pydantic 스키마
 │   │
 │   ├── utils/                   # 유틸리티
@@ -125,6 +144,7 @@ ai-interview-agent/
 │       │   ├── frontend/       # 프론트엔드 포지션 관련 문서
 │       │   ├── devops/         # DevOps 포지션 관련 문서
 │       │   └── ...            # 기타 포지션별 문서
+│       ├── resumes/             # 지원자 이력서 파일 저장 경로
 │       └── vector_store/        # FAISS 인덱스 저장 경로
 │
 ├── docker/                      # Docker 설정
@@ -134,7 +154,8 @@ ai-interview-agent/
 │
 ├── requirements.txt            # Python 패키지 의존성
 ├── README.md                   # 프로젝트 문서
-└── LANGFUSE_SETUP.md          # Langfuse 설정 가이드
+├── LANGFUSE_SETUP.md          # Langfuse 설정 가이드
+└── server/view_db.py          # SQLite 데이터베이스 조회 유틸리티
 ```
 
 ## 🛠 기술 스택
@@ -605,6 +626,102 @@ API_BASE_URL=http://localhost:9898/api/v1
 }
 ```
 
+### 6. 회원 가입
+
+**POST** `/api/v1/auth/signup`
+
+지원자 회원가입을 처리합니다.
+
+**Request Body:**
+```json
+{
+  "name": "홍길동",
+  "birth": "1990-01-01"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "member_id": 1,
+  "name": "홍길동",
+  "birth": "1990-01-01",
+  "role": "NORMAL"
+}
+```
+
+### 7. 로그인
+
+**POST** `/api/v1/auth/login`
+
+지원자 또는 관리자 로그인을 처리합니다.
+
+**Request Body (지원자):**
+```json
+{
+  "role_type": "applicant",
+  "name": "홍길동",
+  "birth": "1990-01-01"
+}
+```
+
+**Request Body (관리자):**
+```json
+{
+  "role_type": "manager",
+  "name": "최준빈"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "member_id": 1,
+  "role": "NORMAL",
+  "name": "홍길동",
+  "birth": "1990-01-01"
+}
+```
+
+### 8. 채용공고 목록 조회
+
+**GET** `/api/v1/recruitments/`
+
+등록된 채용공고 목록을 조회합니다.
+
+### 9. 채용공고 상세 조회
+
+**GET** `/api/v1/recruitments/{recruitment_id}`
+
+특정 채용공고의 상세 정보를 조회합니다.
+
+### 10. 지원 이력 조회
+
+**GET** `/api/v1/applications/my/{member_id}`
+
+특정 회원의 지원 이력을 조회합니다.
+
+### 11. 지원서 제출
+
+**POST** `/api/v1/applications/`
+
+채용공고에 지원서를 제출합니다.
+
+**Request Body:**
+```json
+{
+  "member_id": 1,
+  "recruitment_id": 1,
+  "first_choice_id": 1,
+  "second_choice_id": 2,
+  "mbti": "INTJ",
+  "cover_letter": "자기소개서 내용...",
+  "resume_path": "server/data/resumes/resume_1.pdf"
+}
+```
+
 ## 🔍 Langfuse 통합
 
 Langfuse를 통한 LLM 추적 및 관찰성을 활용하려면:
@@ -686,6 +803,18 @@ python workflow/visualize_graph.py
 - **Mermaid 코드**: Mermaid 다이어그램 코드 생성 (https://mermaid.live/ 에서 시각화 가능)
 - **그래프 정보**: 노드 및 엣지 목록 출력
 
+### 데이터베이스 조회
+
+SQLite 데이터베이스 내용을 확인할 수 있습니다:
+
+```bash
+cd server
+python3 view_db.py list          # 면접 이력 목록 조회
+python3 view_db.py detail 1      # 특정 면접 상세 정보
+python3 view_db.py tables        # 모든 테이블 목록
+python3 view_db.py schema interviews  # 테이블 스키마 조회
+```
+
 ### Langfuse 연결 테스트
 
 ```bash
@@ -708,7 +837,7 @@ python3 test_langfuse.py
 ---
 
 **개발자**: AI Interview Agent Team  
-**버전**: 0.2.0
+**버전**: 0.3.0
 
 ## 📦 컴포넌트 구조 상세
 
@@ -721,6 +850,8 @@ app/
 ├── main.py                    # 앱 진입점, 네비게이션 조합
 ├── components/
 │   ├── sidebar.py            # 사이드바 (메뉴 + 설정)
+│   ├── login.py              # 로그인/가입 페이지 (지원자 및 관리자)
+│   ├── volunteer.py          # 지원자 지원 시스템 (채용공고 조회, 지원, 상태 확인)
 │   ├── overview.py           # Overview(대시보드) 페이지
 │   ├── candidate_form.py     # Studio 페이지 + 파일 라이브러리
 │   ├── interview_chat.py      # 질문/답변 및 평가 렌더링
@@ -735,7 +866,9 @@ app/
 ### 컴포넌트 역할
 
 - **`main.py`**: Streamlit 앱의 진입점으로, 페이지 설정 및 컴포넌트 조합을 담당
-- **`components/sidebar.py`**: 네비게이션/설정 UI, RAG 옵션, 질문 개수 등 제어
+- **`components/sidebar.py`**: 네비게이션/설정 UI, RAG 옵션, 질문 개수 등 제어, 로그인/로그아웃 처리
+- **`components/login.py`**: 로그인/가입 페이지 (지원자: 이름/생년월일, 관리자: 이름)
+- **`components/volunteer.py`**: 지원자 지원 시스템 (채용공고 조회, 지원서 제출, 지원 상태 확인)
 - **`components/overview.py`**: 대시보드 소개 및 빠른 액션(Studio/History 이동)
 - **`components/candidate_form.py`**: Studio 화면, JD/이력서 텍스트 입력 + 파일 라이브러리, 면접 실행
 - **`components/interview_chat.py`**: 질문/답변 트리 구조 렌더링, 평가 결과 표시
