@@ -10,6 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 from langfuse import Langfuse
 from langfuse.langchain import CallbackHandler
+from openai import AzureOpenAI
 
 # server/.env 를 우선 로드하되, 기존처럼 상위 디렉터리(.env)도 함께 로드
 BASE_DIR = Path(__file__).resolve().parent
@@ -320,3 +321,15 @@ def get_langfuse_handler(session_id: str | None = None) -> CallbackHandler | Non
     LangGraph / Agent 에서 바로 import 하여 사용하기 좋은 헬퍼.
     """
     return settings.get_langfuse_handler(session_id=session_id)
+
+
+def get_client() -> AzureOpenAI:
+    """
+    OpenAI SDK(Azure) 클라이언트를 반환합니다.
+    - InsightsAgent에서 Responses / Embeddings API를 직접 호출할 때 사용
+    """
+    return AzureOpenAI(
+        api_key=settings.AOAI_API_KEY,
+        api_version=settings.AOAI_API_VERSION,
+        azure_endpoint=settings.AOAI_ENDPOINT,
+    )

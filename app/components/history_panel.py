@@ -321,6 +321,7 @@ def render_history_tab() -> None:
                                 ):
                                     # 인사이트 탭에서 기본 선택 ID로 사용
                                     st.session_state["insights_selected_interview_id"] = interview_id
+                                    st.session_state["nav_selected"] = "Insights"
                                     st.session_state["nav_selected_code"] = "insights"
                                     st.rerun()
 

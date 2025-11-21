@@ -402,20 +402,23 @@ def render_questions(
                 parent_label = f"(Q{(parent_index or 0) + 1}의 후속 질문)"
             else:
                 parent_label = "(후속 질문)"
+            badge_html = f"<span class='shad-badge'>{category}</span>"
             header_html = (
                 f"<div style='margin-left:{indent_px}px'>"
-                f"<strong>{tree_prefix}Q{display_no}. 🔁 {category} {parent_label}</strong>"
+                f"<strong>{tree_prefix}Q{display_no}. 🔁 {badge_html} {parent_label}</strong>"
                 f"</div>"
             )
         else:
+            badge_html = f"<span class='shad-badge'>{category}</span>"
             header_html = (
                 f"<div style='margin-left:{indent_px}px'>"
-                f"<strong>{tree_prefix}Q{display_no}. ({category})</strong>"
+                f"<strong>{tree_prefix}Q{display_no}. {badge_html}</strong>"
                 f"</div>"
             )
 
         with st.container(border=True):
             st.markdown(header_html, unsafe_allow_html=True)
+            st.markdown("<hr class='shad-hr' />", unsafe_allow_html=True)
 
             q_col, _, a_col = st.columns([3, 0.2, 3])
 
@@ -654,6 +657,40 @@ def render_studio_page() -> None:
 
     st.title("🧑‍💼 Interview Studio")
 
+    # Shadcn 느낌의 카드/배지 스타일을 간단히 적용
+    st.markdown(
+        """
+        <style>
+        .shad-card {
+            background: #0f172a;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 14px;
+            padding: 16px 16px 12px 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 16px;
+        }
+        .shad-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: rgba(59,130,246,0.12);
+            color: #bfdbfe;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid rgba(59,130,246,0.25);
+        }
+        .shad-hr {
+            height: 1px;
+            border: 0;
+            background: linear-gradient(90deg, rgba(148,163,184,0.4), rgba(148,163,184,0.1));
+            margin: 12px 0;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     # Stepper (기본 1단계)
     if "studio_step" not in st.session_state:
         st.session_state["studio_step"] = 1
@@ -670,6 +707,7 @@ def render_studio_page() -> None:
 
     # ---------- Step 1: JD / 이력서 입력 + 라이브러리 + 업로드 ---------- #
     with col_left:
+        st.markdown('<div class="shad-card">', unsafe_allow_html=True)
         st.subheader("📝 채용 공고 (JD)")
 
         jd_text = st.text_area(
@@ -693,8 +731,10 @@ def render_studio_page() -> None:
             upload_jd_file(jd_upload)
             # 업로드 후 라이브러리 자동 갱신을 위해 rerun
             st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with col_right:
+        st.markdown('<div class="shad-card">', unsafe_allow_html=True)
         st.subheader("📄 이력서 내용")
 
         resume_text = st.text_area(
@@ -717,10 +757,12 @@ def render_studio_page() -> None:
         if st.button("⬆️ 이력서 파일 업로드", use_container_width=True):
             upload_resume_file(resume_upload)
             st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
     # ---------- 인터뷰 실행 버튼 ---------- #
+    st.markdown('<div class="shad-card">', unsafe_allow_html=True)
     job_title = st.text_input("채용 포지션명", value="백엔드 개발자", key="studio_job_title")
     candidate_name = st.text_input("지원자 이름", value="홍길동", key="studio_candidate_name")
 
@@ -759,6 +801,7 @@ def render_studio_page() -> None:
                         st.session_state["last_interview_id"] = st.session_state[
                             "run_tab_interview_id"
                         ]
+    st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------- 실행된 결과 보여주기 ---------- #
     if st.session_state.get("run_tab_state") is not None:
@@ -790,6 +833,8 @@ def render_studio_page() -> None:
         else:
             st.session_state["studio_step"] = 3
 
+        st.markdown('<div class="shad-card">', unsafe_allow_html=True)
+
         if selected_tab == "📊 평가 결과":
             render_evaluation(state)
         elif selected_tab == "💬 인터뷰 질문 (답변/재평가)":
@@ -802,3 +847,5 @@ def render_studio_page() -> None:
             )
         else:
             st.json(state)
+
+        st.markdown("</div>", unsafe_allow_html=True)

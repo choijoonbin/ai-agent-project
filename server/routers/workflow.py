@@ -12,11 +12,12 @@ from sqlalchemy.orm import Session
 
 from workflow.state import InterviewState, create_initial_state
 from workflow.graph import create_interview_graph
-from utils.config import get_langfuse_handler, get_llm
+from utils.config import get_langfuse_handler
 from db.database import get_db
 from db.models import Interview as InterviewModel
 from db.schemas import InterviewSchema, InterviewCreate
 from workflow.agents.judge_agent import JudgeAgent
+from workflow.agents.insights_agent import InsightsAgent
 
 router = APIRouter(
     prefix="/api/v1/workflow",
@@ -255,40 +256,8 @@ def generate_interview_insights(
     evaluation = state.get("evaluation", {})
     qa_history = state.get("qa_history", [])
 
-    # LLM 호출 준비
-    llm = get_llm(use_mini=request.use_mini, streaming=False)
-
-    # 프롬프트: JSON 형식으로만 답변하도록 강제
-    system_prompt = """
-당신은 채용 담당자와 현업 리더를 돕는 HR/조직 컨설팅 전문가입니다.
-입력으로 주어진 JD, 후보자의 이력, 면접 평가 내용을 바탕으로
-"채용 후 90일 온보딩 전략"과 "조직 기여도/성장 잠재력"을 분석합니다.
-
-반드시 JSON만 출력해야 하며, 설명 문구를 JSON 바깥에 추가하면 안 됩니다.
-JSON 스키마는 다음과 같습니다:
-
-{
-  "soft_landing_plan": "입사 후 90일 동안 어떤 식으로 온보딩/학습/적응을 지원하면 좋은지에 대한 구체적인 제안 (한국어, 문단 형태)",
-  "contribution_summary": "이 후보자가 팀/조직에 어떤 방식으로 기여할 수 있을지에 대한 요약 (한국어)",
-  "contribution_scores": {
-    "short_term_impact": 1~5 정수 또는 실수,
-    "long_term_growth": 1~5,
-    "team_fit": 1~5,
-    "risk_level": 1~5  // 숫자가 높을수록 리스크가 크다는 의미
-  },
-  "risk_factors": [
-    "리스크 또는 주의해야 할 점 항목 (문장)",
-    "..."
-  ],
-  "growth_recommendations": [
-    "성장을 위해 회사/리더가 제공하면 좋은 지원/코칭/환경에 대한 제안",
-    "..."
-  ]
-}
-    """.strip()
-
-    # context를 하나의 큰 문자열로 구성
-    context = {
+    agent_state: dict[str, Any] = {
+        **state,
         "job_title": job_title,
         "candidate_name": candidate_name,
         "jd_text": jd_text,
@@ -297,39 +266,8 @@ JSON 스키마는 다음과 같습니다:
         "qa_history": qa_history,
     }
 
-    user_prompt = (
-        "다음은 한 후보자의 채용 인터뷰 관련 전체 컨텍스트입니다.\n\n"
-        f"{json.dumps(context, ensure_ascii=False, indent=2)}\n\n"
-        "위 정보를 바탕으로 앞서 설명한 JSON 스키마에 맞게 인사이트를 생성해 주세요."
-    )
-
-    # LangChain 스타일 without explicit callbacks (안전하게 최소 호출)
-    from langchain_core.messages import SystemMessage, HumanMessage  # type: ignore
-
-    response = llm.invoke(
-        [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt),
-        ]
-    )
-
-    raw_content = getattr(response, "content", "") if response is not None else ""
-
-    # JSON 파싱 시도
-    try:
-        insights_obj = json.loads(raw_content)
-        if not isinstance(insights_obj, dict):
-            raise ValueError("Insights is not a JSON object")
-    except Exception:
-        # 실패 시 raw 텍스트를 그대로 넘김
-        insights_obj = {
-            "soft_landing_plan": "",
-            "contribution_summary": "",
-            "contribution_scores": {},
-            "risk_factors": [],
-            "growth_recommendations": [],
-            "raw_text": raw_content,
-        }
+    insights_agent = InsightsAgent(use_rag=True, use_mini=request.use_mini)
+    insights_obj = insights_agent.run(agent_state)
 
     return InterviewInsightsResponse(
         status="success",
