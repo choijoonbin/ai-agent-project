@@ -2,159 +2,154 @@
 
 from __future__ import annotations
 
-from importlib import import_module
-from typing import Literal, Optional, Callable
-
 import streamlit as st
+from streamlit_option_menu import option_menu
 
 
-def _load_option_menu() -> Optional[Callable[..., str]]:
-    """
-    streamlit-extras 설치 여부와 상관없이 안전하게 option_menu를 로드.
-    - 새로 설치 후 앱을 재시작하지 않아도 재시도되도록 매 호출 시 import 시도.
-    """
-    try:
-        module = import_module("streamlit_extras.option_menu")
-        return getattr(module, "option_menu")
-    except ModuleNotFoundError:
-        return None
-
-NavKey = Literal["overview", "studio", "history", "insights", "settings"]
-
-
-def _nav_label_to_key(label: str) -> NavKey:
-    mapping = {
-        "Overview": "overview",
-        "면접 스튜디오": "studio",
-        "면접 이력": "history",
-        "인사이트": "insights",
-        "설정": "settings",
+def _ensure_sidebar_state() -> None:
+    """사이드바에서 사용하는 공통 세션 키 기본값 세팅."""
+    defaults = {
+        # 네비게이션 기본 페이지 (코드 값 기준)
+        "nav_selected_code": "overview",  # 최초에는 Overview
+        # AI 설정 패널 접힘/펼침 상태 (기본: 접힘)
+        "sidebar_show_settings": False,
+        # 인터뷰 옵션 기본값 (init_app_session_state 에도 있지만 방어용)
+        "cfg_enable_rag": True,
+        "cfg_use_mini": True,
+        "cfg_total_questions": 5,
+        "cfg_theme_mode": "시스템 기본",
     }
-    return mapping.get(label, "overview")  # fallback
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
 
-def render_sidebar() -> NavKey:
-    """
-    좌측 사이드바 전체 렌더링.
-    - 상단: streamlit-option-menu 기반 메인 메뉴
-    - 하단: ⚙️ AI Interview 설정 (expander로 접기/펼치기, 기본은 접힌 상태)
-    """
-    # ---- nav 기본값 보정 ----
-    if "nav_selected" not in st.session_state:
-        st.session_state["nav_selected"] = "studio"
+def render_sidebar() -> None:
+    """왼쪽 사이드바 전체 렌더링."""
+    _ensure_sidebar_state()
 
-    # ======================
-    # 1) 상단 메인 메뉴
-    # ======================
+    # -----------------------
+    # 1) 네비게이션 메뉴
+    # -----------------------
     st.markdown("### 🧭 메뉴")
 
-    # 현재 선택 상태를 index로 변환
-    nav_order: list[NavKey] = [
-        "overview",
-        "studio",
-        "history",
-        "insights",
-        "settings",
-    ]
+    labels = ["Overview", "면접 스튜디오", "면접 이력", "인사이트", "설정"]
+    codes = ["overview", "studio", "history", "insights", "settings"]
+    icons = ["house", "person-badge", "book", "bar-chart", "gear"]
+
+    # 현재 선택된 코드 기준으로 default_index 계산
+    current_code = st.session_state.get("nav_selected_code", "overview")
     try:
-        default_index = nav_order.index(st.session_state["nav_selected"])
+        default_index = codes.index(current_code)
     except ValueError:
-        default_index = 1  # fallback: studio
+        default_index = 0
 
-    nav_options_display = ["Overview", "면접 스튜디오", "면접 이력", "인사이트", "설정"]
-    option_menu = _load_option_menu()
-
-    if option_menu is not None:
+    # Shadcn 느낌의 카드 스타일을 입힌 option_menu
+    with st.container():
         selected_label: str = option_menu(
             menu_title=None,
-            options=nav_options_display,
-            icons=["house", "person-workspace", "book", "bar-chart-line", "gear"],
+            options=labels,
+            icons=icons,
             menu_icon="compass",
             default_index=default_index,
+            orientation="vertical",
             styles={
                 "container": {
-                    "padding": "0.5rem 0.2rem 0.8rem 0.2rem",
-                    "background-color": "rgba(15,23,42,0.0)",
+                    "padding": "0.75rem 0.2rem",
+                    "border-radius": "18px",
+                    "background-color": "rgba(15,23,42,0.95)",
                 },
-                "icon": {"color": "#e5e7eb", "font-size": "1.0rem"},
+                "icon": {"color": "#e5e7eb", "font-size": "1.05rem"},
                 "nav-link": {
                     "font-size": "0.95rem",
-                    "padding": "0.45rem 0.75rem",
-                    "margin": "0.1rem 0.25rem",
+                    "padding": "0.55rem 0.9rem",
+                    "margin": "0.18rem 0.35rem",
                     "border-radius": "999px",
                     "color": "#e5e7eb",
-                    "background-color": "rgba(15,23,42,0.35)",
+                    "background-color": "transparent",
                 },
                 "nav-link-selected": {
-                    "background-color": "rgba(248, 113, 113, 0.95)",
-                    "color": "#0f172a",
+                    "background-color": "#f97373",  # 선택된 메뉴 색
+                    "color": "#111827",
                     "font-weight": "600",
                 },
             },
-            orientation="vertical",
-        )
-    else:
-        # streamlit-extras 미설치 시 기본 radio 로 대체
-        selected_label = st.radio(
-            "메뉴 선택",
-            options=nav_options_display,
-            index=default_index,
-            label_visibility="collapsed",
-            key=None,
+            key="sidebar_nav_menu",
         )
 
-    nav_key: NavKey = _nav_label_to_key(selected_label)
-    st.session_state["nav_selected"] = nav_key
+    # 선택된 라벨 → 코드로 변환해서 session_state에 저장
+    try:
+        selected_index = labels.index(selected_label)
+        selected_code = codes[selected_index]
+    except ValueError:
+        selected_code = "overview"
 
-    # 살짝 구분선
-    st.markdown(
-        "<hr style='border: 0; border-top: 1px solid rgba(148,163,184,0.35); "
-        "margin: 0.8rem 0 0.9rem 0;'/>",
-        unsafe_allow_html=True,
+    st.session_state["nav_selected_code"] = selected_code
+
+    # 네비게이션과 설정 패널 사이 구분선
+    st.markdown("---")
+
+    # -----------------------
+    # 2) AI Interview 설정 (접었다/펼쳤다)
+    # -----------------------
+    # 헤더 + 토글 버튼
+    col_title, col_btn = st.columns([4, 1])
+
+    with col_title:
+        st.markdown("### ⚙️ AI Interview 설정")
+
+    with col_btn:
+        # 한 번 클릭에 바로 열리고 닫히도록 세션 상태만 토글
+        is_open = st.session_state.get("sidebar_show_settings", False)
+        label = "▾" if is_open else "▸"
+        if st.button(label, key="sidebar_settings_toggle"):
+            st.session_state["sidebar_show_settings"] = not is_open
+            st.rerun()
+
+    # 접힌 상태면 여기서 바로 리턴
+    if not st.session_state.get("sidebar_show_settings", False):
+        return
+
+    # ---- 설정 내용 ----
+    st.write("")  # 간격
+
+    # UI 모드
+    st.markdown("#### 🎨 UI 모드")
+    st.caption("화면 분위기를 선택하세요. (사이드바 & 카드 스타일)")
+
+    ui_mode = st.radio(
+        "UI 모드 선택",
+        options=["시스템 기본", "라이트", "다크"],
+        key="cfg_theme_mode",
+        label_visibility="collapsed",
     )
 
-    # ======================================
-    # 2) ⚙️ AI Interview 설정 (Expander)
-    #    - 기본은 접혀 있는 상태(expanded=False)
-    #    - 두 번 클릭해야 하는 문제를 없애기 위해
-    #      Streamlit 기본 expander + 위젯 key만 사용
-    # ======================================
+    st.write("")  # 간격
 
-    with st.expander("⚙️ AI Interview 설정", expanded=False):
-        # ---- UI 모드 ----
-        st.markdown("#### 🎨 UI 모드")
-        st.caption("화면 분위기를 선택하세요. (사이드바 & 카드 스타일)")
+    # 인터뷰 옵션
+    st.markdown("#### 🤖 인터뷰 옵션")
 
-        # init_app_session_state 에서 기본값을 넣어주고 있으므로
-        # 여기서는 value/index 를 명시하지 않고 key 만 사용 → 경고/더블클릭 문제 방지
-        st.radio(
-            "UI 모드 선택",
-            options=["시스템 기본", "라이트", "다크"],
-            key="cfg_theme_mode",
-            horizontal=False,
-            label_visibility="collapsed",
-        )
+    st.checkbox(
+        "RAG 활성화",
+        key="cfg_enable_rag",
+        value=st.session_state.get("cfg_enable_rag", True),
+    )
 
-        st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
+    st.checkbox(
+        "경량 모델 사용 (gpt-4o-mini)",
+        key="cfg_use_mini",
+        value=st.session_state.get("cfg_use_mini", True),
+    )
 
-        # ---- 인터뷰 옵션 ----
-        st.markdown("#### 🤖 인터뷰 옵션")
+    st.markdown("<span style='font-size:0.8rem;'>초기 생성 질문 개수</span>", unsafe_allow_html=True)
 
-        st.checkbox("RAG 활성화", key="cfg_enable_rag")
-        st.checkbox("경량 모델 사용 (gpt-4o-mini)", key="cfg_use_mini")
-
-        st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
-
-        st.markdown("초기 생성 질문 개수")
-        # 마찬가지로 key만 사용 (init에서 기본값 이미 세팅)
-        st.slider(
-            "초기 생성 질문 개수",
-            min_value=3,
-            max_value=10,
-            step=1,
-            key="cfg_total_questions",
-            label_visibility="collapsed",
-        )
-
-    # 최종 nav_key를 main.py에서 사용할 수 있도록 반환
-    return nav_key
+    # ⚠️ 여기서는 value 를 session_state 값으로만 설정하고,
+    # 위젯 생성 이후에는 따로 session_state 를 덮어쓰지 않습니다.
+    st.slider(
+        "질문 개수(초기 생성 개수)",
+        min_value=3,
+        max_value=10,
+        key="cfg_total_questions",
+        value=int(st.session_state.get("cfg_total_questions", 5)),
+        label_visibility="collapsed",
+    )

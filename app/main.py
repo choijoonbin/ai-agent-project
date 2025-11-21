@@ -20,7 +20,9 @@ from components.sidebar import render_sidebar
 from components.candidate_form import render_studio_page
 from components.history_panel import render_history_tab
 from components.overview import render_overview_page
-from components.insights import render_insights_page  # ✅ 새로 추가
+from components.insights import render_insights_page  # 인사이트 페이지
+# settings 는 main 안에서 간단히 렌더링
+
 
 # app/.env 로드
 load_dotenv()
@@ -55,6 +57,7 @@ def _render_header_process_image(
 
 
 def _render_settings_page() -> None:
+    """설정(플레이스홀더) 페이지."""
     st.title("⚙️ 시스템 설정")
     st.write("추후, API 상태 / 버전 정보 / 디버그 옵션 등을 제공할 수 있습니다.")
     st.info("현재는 플레이스홀더 페이지입니다.")
@@ -76,17 +79,26 @@ def main() -> None:
         render_sidebar()
 
     # ---------- 본문: 네비게이션에 따라 분기 ---------- #
-    current_page = st.session_state.get("nav_selected", "Studio")
+    # sidebar.py 에서 저장하는 값은 nav_selected_code ("overview" | "studio" | "history" | "insights" | "settings")
+    nav_code = st.session_state.get("nav_selected_code", "overview")
 
-    if current_page == "Overview":
+    if nav_code == "overview":
+        # 대시보드 / 요약 페이지
         render_overview_page()
-    elif current_page == "Studio":
+
+    elif nav_code == "studio":
+        # 면접 스튜디오 (기존 면접 실행 탭)
         render_studio_page()
-    elif current_page == "History":
+
+    elif nav_code == "history":
+        # 면접 이력
         render_history_tab()
-    elif current_page == "Insights":
+
+    elif nav_code == "insights":
+        # 인사이트 페이지
         render_insights_page()
-    else:
+
+    else:  # "settings"
         _render_settings_page()
 
 

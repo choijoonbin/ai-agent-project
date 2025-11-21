@@ -3,7 +3,6 @@
 import os
 import json
 from typing import Any, Dict, List
-from pathlib import Path
 
 import requests
 import streamlit as st
@@ -24,6 +23,19 @@ def _get(url: str, *, timeout: int = 30) -> requests.Response:
 
 def _post(url: str, payload: Dict[str, Any], *, timeout: int = 180) -> requests.Response:
     resp = requests.post(url, json=payload, timeout=timeout)
+    return resp
+
+
+def _post_multipart(url: str, file_field: str, uploaded_file, *, timeout: int = 120) -> requests.Response:
+    """
+    파일 업로드용 multipart POST 헬퍼.
+    - file_field: 백엔드에서 기대하는 필드명 (예: "file")
+    - uploaded_file: st.file_uploader 가 반환한 객체
+    """
+    files = {
+        file_field: (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type),
+    }
+    resp = requests.post(url, files=files, timeout=timeout)
     return resp
 
 
@@ -103,7 +115,7 @@ def call_followup_api(
     return resp.json()
 
 
-# ---------- JD / 이력서 파일 라이브러리 ---------- #
+# ---------- JD / 이력서 파일 라이브러리 & 업로드 ---------- #
 
 def fetch_jd_list() -> List[Dict[str, Any]]:
     url = f"{API_BASE_URL}/files/jd"
@@ -139,6 +151,57 @@ def fetch_resume_content(file_id: str) -> str:
         raise RuntimeError(f"이력서 내용 조회 실패: {resp.status_code} - {resp.text}")
     data = resp.json()
     return data.get("content", "")
+
+
+def upload_jd_file(uploaded_file) -> None:
+    """
+    JD 파일 업로드.
+    예상 백엔드 엔드포인트:
+        POST /api/v1/files/jd/upload
+        - multipart/form-data, 필드명 "file"
+        - 응답: {"id": "...", "filename": "..."} 형식 가정
+    """
+    if uploaded_file is None:
+        st.warning("업로드할 JD 파일을 선택해 주세요.")
+        return
+
+    url = f"{API_BASE_URL}/files/jd/upload"
+    try:
+        resp = _post_multipart(url, "file", uploaded_file, timeout=120)
+    except Exception as e:
+        st.error(f"JD 업로드 중 오류가 발생했습니다: {e}")
+        return
+
+    if resp.status_code != 200:
+        st.error(f"JD 업로드 실패: {resp.status_code} - {resp.text}")
+        return
+
+    st.success("JD 파일이 업로드되었습니다. 목록을 갱신했습니다.")
+
+
+def upload_resume_file(uploaded_file) -> None:
+    """
+    이력서 파일 업로드.
+    예상 백엔드 엔드포인트:
+        POST /api/v1/files/resume/upload
+        - multipart/form-data, 필드명 "file"
+    """
+    if uploaded_file is None:
+        st.warning("업로드할 이력서 파일을 선택해 주세요.")
+        return
+
+    url = f"{API_BASE_URL}/files/resume/upload"
+    try:
+        resp = _post_multipart(url, "file", uploaded_file, timeout=120)
+    except Exception as e:
+        st.error(f"이력서 업로드 중 오류가 발생했습니다: {e}")
+        return
+
+    if resp.status_code != 200:
+        st.error(f"이력서 업로드 실패: {resp.status_code} - {resp.text}")
+        return
+
+    st.success("이력서 파일이 업로드되었습니다. 목록을 갱신했습니다.")
 
 
 def _render_file_library(file_type: str) -> None:
@@ -513,13 +576,88 @@ def render_questions(
 
 
 # ==========================
-# 4) Studio 페이지 (면접 실행)
+# 4) Studio Stepper + 페이지
 # ==========================
+
+def _render_studio_stepper() -> None:
+    """상단에 4단계 Stepper를 그려주는 작은 유틸."""
+    current = int(st.session_state.get("studio_step", 1))
+
+    steps = [
+        (1, "JD / 이력서 선택"),
+        (2, "AI 분석 & 질문 생성"),
+        (3, "인터뷰 진행"),
+        (4, "평가 & 인사이트"),
+    ]
+
+    # 간단한 CSS + columns 로 Stepper 표현
+    st.markdown(
+        """
+        <style>
+        .stepper-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 1.2rem;
+        }
+        .stepper-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.8rem;
+            min-width: 80px;
+        }
+        .stepper-circle {
+            width: 26px;
+            height: 26px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border: 2px solid rgba(148,163,184,0.6);
+            background: rgba(15,23,42,0.9);
+            color: #e5e7eb;
+        }
+        .stepper-circle-active {
+            background: linear-gradient(135deg, #f97373, #fb923c);
+            border-color: rgba(248,250,252,0.9);
+            color: #111827;
+        }
+        .stepper-line {
+            flex: 1;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(148,163,184,0.5), rgba(55,65,81,0.3));
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    html = ['<div class="stepper-container">']
+    for i, (num, label) in enumerate(steps):
+        active_class = " stepper-circle-active" if num == current else ""
+        html.append('<div class="stepper-step">')
+        html.append(f'<div class="stepper-circle{active_class}">{num}</div>')
+        html.append(f'<div style="margin-top:4px; text-align:center;">{label}</div>')
+        html.append("</div>")
+        if i < len(steps) - 1:
+            html.append('<div class="stepper-line"></div>')
+    html.append("</div>")
+
+    st.markdown("".join(html), unsafe_allow_html=True)
+
 
 def render_studio_page() -> None:
     """사이드바에서 'Studio' 선택 시 렌더링되는 메인 화면."""
 
     st.title("🧑‍💼 Interview Studio")
+
+    # Stepper (기본 1단계)
+    if "studio_step" not in st.session_state:
+        st.session_state["studio_step"] = 1
+    _render_studio_stepper()
 
     # 파일 선택으로 미리 저장된 텍스트가 있으면 위젯 생성 전에 주입
     for base_key in ("studio_jd_text", "studio_resume_text"):
@@ -530,7 +668,7 @@ def render_studio_page() -> None:
 
     col_left, col_right = st.columns(2)
 
-    # ---------- Step 1: JD / 이력서 입력 + 라이브러리 ---------- #
+    # ---------- Step 1: JD / 이력서 입력 + 라이브러리 + 업로드 ---------- #
     with col_left:
         st.subheader("📝 채용 공고 (JD)")
 
@@ -538,11 +676,23 @@ def render_studio_page() -> None:
             "채용 공고 (JD) 텍스트",
             key="studio_jd_text",
             height=260,
-            placeholder="채용 공고 내용을 여기에 붙여넣거나, 아래 라이브러리에서 선택하세요.",
+            placeholder="채용 공고 내용을 여기에 붙여넣거나, 아래 라이브러리/업로드를 사용하세요.",
         )
 
         with st.expander("📁 채용공고 파일 라이브러리에서 불러오기"):
             _render_file_library("jd")
+
+        st.caption("파일 업로드 (docx/pdf/md/txt 지원)")
+        jd_upload = st.file_uploader(
+            "JD 파일 업로드",
+            type=["docx", "pdf", "md", "txt"],
+            key="jd_file_uploader",
+            label_visibility="collapsed",
+        )
+        if st.button("⬆️ JD 파일 업로드", use_container_width=True):
+            upload_jd_file(jd_upload)
+            # 업로드 후 라이브러리 자동 갱신을 위해 rerun
+            st.rerun()
 
     with col_right:
         st.subheader("📄 이력서 내용")
@@ -551,11 +701,22 @@ def render_studio_page() -> None:
             "이력서 텍스트",
             key="studio_resume_text",
             height=260,
-            placeholder="지원자의 이력서 내용을 텍스트로 붙여넣거나, 아래 라이브러리에서 선택하세요.",
+            placeholder="지원자의 이력서 내용을 텍스트로 붙여넣거나, 아래 라이브러리/업로드를 사용하세요.",
         )
 
         with st.expander("📁 이력서 파일 라이브러리에서 불러오기"):
             _render_file_library("resume")
+
+        st.caption("파일 업로드 (docx/pdf/md/txt 지원)")
+        resume_upload = st.file_uploader(
+            "이력서 파일 업로드",
+            type=["docx", "pdf", "md", "txt"],
+            key="resume_file_uploader",
+            label_visibility="collapsed",
+        )
+        if st.button("⬆️ 이력서 파일 업로드", use_container_width=True):
+            upload_resume_file(resume_upload)
+            st.rerun()
 
     st.markdown("---")
 
@@ -567,6 +728,8 @@ def render_studio_page() -> None:
         if not jd_text.strip() or not resume_text.strip():
             st.error("JD와 이력서 내용을 모두 입력하거나 파일에서 불러와 주세요.")
         else:
+            # Step 2 로 전환
+            st.session_state["studio_step"] = 2
             with st.spinner("AI 면접 에이전트가 분석 중입니다..."):
                 try:
                     result = call_interview_api(
@@ -584,6 +747,9 @@ def render_studio_page() -> None:
                 else:
                     st.session_state["run_tab_state"] = result.get("state", {})
                     st.session_state["run_tab_interview_id"] = result.get("interview_id")
+
+                    # 질문 생성까지 완료 → Step 3
+                    st.session_state["studio_step"] = 3
 
                     st.success("면접 플로우 실행 완료!")
                     if st.session_state["run_tab_interview_id"] is not None:
@@ -617,6 +783,12 @@ def render_studio_page() -> None:
             horizontal=True,
             label_visibility="collapsed",
         )
+
+        # 탭 선택에 따라 Stepper 단계도 자연스럽게 이동
+        if selected_tab == "📊 평가 결과":
+            st.session_state["studio_step"] = 4
+        else:
+            st.session_state["studio_step"] = 3
 
         if selected_tab == "📊 평가 결과":
             render_evaluation(state)
