@@ -26,13 +26,20 @@ def init_app_session_state() -> None:
         "last_interview_id": None,
 
         # Navigation (사이드바 상단 메뉴)
-        "nav_selected": "Studio",
+        "nav_selected": "login",
+        "nav_selected_code": "login",
 
         # 사이드바 - AI 설정 패널 펼침 여부
         "sidebar_ai_settings_open": True,
 
         # Insights 결과 캐시
         "insights_result": None,
+
+        # Auth / user context
+        "member_id": None,
+        "member_name": None,
+        "member_birth": None,
+        "member_role": None,
     }
 
     for k, v in defaults.items():

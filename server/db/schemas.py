@@ -27,3 +27,84 @@ class InterviewSchema(InterviewBase):
 
     class Config:
         from_attributes = True  # SQLAlchemy 모델 → Pydantic 변환
+
+
+# -------- Members -------- #
+
+
+class MemberBase(BaseModel):
+    name: str
+    birth: str  # YYYY-MM-DD
+
+
+class MemberCreate(MemberBase):
+    role: str = "NORMAL"
+
+
+class MemberSchema(MemberBase):
+    id: int
+    role: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# -------- Recruitments -------- #
+
+
+class RecruitmentBase(BaseModel):
+    title: str
+    company: str | None = None
+    location: str | None = None
+    employment_type: str | None = None
+    experience_level: str | None = None
+    role_category: str | None = None
+    deadline: str | None = None
+    status: str = "OPEN"
+    summary: str | None = None
+    file_path: str
+    raw_text: str | None = None
+    first_line: str | None = None
+    experience_badge: str | None = None
+    location_badge: str | None = None
+    requirement_keywords: list[str] | None = None
+
+
+class RecruitmentCreate(RecruitmentBase):
+    pass
+
+
+class RecruitmentSchema(RecruitmentBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# -------- Applications -------- #
+
+
+class ApplicationBase(BaseModel):
+    member_id: int
+    recruitment_id: int
+    first_choice_id: int
+    second_choice_id: int | None = None
+    mbti: str | None = None
+    cover_letter: str | None = None
+    resume_path: str
+    status: str = "IN_PROGRESS"
+
+
+class ApplicationCreate(ApplicationBase):
+    pass
+
+
+class ApplicationSchema(ApplicationBase):
+    id: int
+    submitted_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    class Config:
+        from_attributes = True

@@ -21,6 +21,8 @@ from components.candidate_form import render_studio_page
 from components.history_panel import render_history_tab
 from components.overview import render_overview_page
 from components.insights import render_insights_page  # 인사이트 페이지
+from components.login import render_login_page
+from components.volunteer import render_jobs_page, render_status_page, render_job_detail_page
 # settings 는 main 안에서 간단히 렌더링
 
 
@@ -79,26 +81,36 @@ def main() -> None:
         render_sidebar()
 
     # ---------- 본문: 네비게이션에 따라 분기 ---------- #
-    # sidebar.py 에서 저장하는 값은 nav_selected_code ("overview" | "studio" | "history" | "insights" | "settings")
-    nav_code = st.session_state.get("nav_selected_code", "overview")
+    nav_code = st.session_state.get("nav_selected_code", "login")
 
-    if nav_code == "overview":
-        # 대시보드 / 요약 페이지
+    if nav_code == "login":
+        render_login_page()
+
+    elif nav_code == "overview":
+        render_overview_page()
+
+    elif nav_code == "manager":
         render_overview_page()
 
     elif nav_code == "studio":
-        # 면접 스튜디오 (기존 면접 실행 탭)
         render_studio_page()
 
     elif nav_code == "history":
-        # 면접 이력
         render_history_tab()
 
     elif nav_code == "insights":
-        # 인사이트 페이지
         render_insights_page()
 
-    else:  # "settings"
+    elif nav_code in ("jobs", "volunteer"):
+        render_jobs_page()
+
+    elif nav_code == "status":
+        render_status_page()
+
+    elif nav_code == "job_detail":
+        render_job_detail_page()
+
+    else:  # settings
         _render_settings_page()
 
 

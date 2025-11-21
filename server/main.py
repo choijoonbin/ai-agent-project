@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from utils.config import settings
 from db.database import Base, engine
 from routers import workflow, history, files
+from routers import auth, recruitments, applications
 
 
 def create_app() -> FastAPI:
@@ -42,6 +43,9 @@ def create_app() -> FastAPI:
     app.include_router(workflow.router)
     app.include_router(history.router)
     app.include_router(files.router)  # 파일 관리 라우터 추가
+    app.include_router(auth.router)
+    app.include_router(recruitments.router)
+    app.include_router(applications.router)
 
     return app
 
