@@ -36,4 +36,5 @@ faiss-cpu>=1.7.4
 # Document Processing
 python-docx>=0.8.11
 pypdf>=4.0.0
+pillow>=10.0.0
 
