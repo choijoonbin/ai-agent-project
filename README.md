@@ -49,7 +49,7 @@ AI 기반 자동화 면접 시스템으로, 채용 공고(JD)와 지원자 이�
 ### 5. 인터랙티브 Streamlit UI & 파일 라이브러리
 - 사이드바 네비게이션(Overview / Studio / History / Insights / Settings)로 페이지 전환
 - Studio 페이지에서 JD/이력서를 직접 입력하거나 **서버의 문서 라이브러리(docx/pdf/md/txt)**에서 불러오기
-- Insights 페이지에서 저장된 면접 정보를 기반으로 Soft-landing 플랜, 기여도/리스크 차트 등 후보자 인사이트 확인
+- **Insights 페이지**: 저장된 면접 정보를 기반으로 LLM이 생성한 Soft-landing 플랜, 기여도/리스크 차트, 성장 추천 등 후보자 인사이트 시각화
 
 ### 5. 모듈화된 UI 컴포넌트
 - **컴포넌트 기반 아키텍처**: 재사용 가능한 UI 컴포넌트로 구성
@@ -73,7 +73,8 @@ ai-interview-agent/
 │   │   ├── candidate_form.py   # 면접 실행 (Studio) + 파일 라이브러리
 │   │   ├── history_panel.py    # 면접 이력 조회/재평가
 │   │   ├── interview_chat.py   # 질문/답변 트리 렌더링
-│   │   ├── insights.py         # 후보자 인사이트 페이지
+│   │   ├── insights.py         # 후보자 인사이트 페이지 (Soft-landing, 기여도/리스크 차트)
+│   │   ├── insights_page.py    # Insights 페이지 스텁 (레거시)
 │   │   ├── settings_page.py    # 설정/플레이스홀더 화면
 │   │   └── sidebar.py          # 네비게이션 & 설정 사이드바
 │   ├── utils/                   # 유틸리티 모듈
@@ -568,6 +569,40 @@ API_BASE_URL=http://localhost:9898/api/v1
 }
 ```
 
+### 5. 인사이트 생성
+
+**POST** `/api/v1/workflow/interview/insights`
+
+저장된 면접 결과를 기반으로 후보자 인사이트를 생성합니다. Soft-landing 플랜, 기여도/리스크 스코어, 성장 추천 등을 포함합니다.
+
+**Request Body:**
+```json
+{
+  "interview_id": 1,
+  "use_mini": true
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "interview_id": 1,
+  "insights": {
+    "soft_landing_plan": "입사 후 90일 온보딩 플랜...",
+    "contribution_summary": "기여도 요약...",
+    "contribution_scores": {
+      "short_term_impact": 4.2,
+      "long_term_growth": 4.5,
+      "team_fit": 4.0,
+      "risk_level": 2.5
+    },
+    "risk_factors": ["리스크 요소 1", "리스크 요소 2"],
+    "growth_recommendations": ["성장 추천 1", "성장 추천 2"]
+  }
+}
+```
+
 ## 🔍 Langfuse 통합
 
 Langfuse를 통한 LLM 추적 및 관찰성을 활용하려면:
@@ -703,7 +738,7 @@ app/
 - **`components/candidate_form.py`**: Studio 화면, JD/이력서 텍스트 입력 + 파일 라이브러리, 면접 실행
 - **`components/interview_chat.py`**: 질문/답변 트리 구조 렌더링, 평가 결과 표시
 - **`components/history_panel.py`**: 면접 이력 목록 조회, 상세/재평가 UI
-- **`components/insights.py`**: 후보자 인사이트(Soft-landing, 기여도/리스크 차트) 생성 및 표시
+- **`components/insights.py`**: 후보자 인사이트 페이지 구현 (Soft-landing 플랜, 기여도/리스크 차트, 성장 추천 등)
 - **`components/settings_page.py`**: 시스템 설정/추후 확장용 플레이스홀더
 - **`utils/state_manager.py`**: Streamlit 세션 상태 초기화 및 테마 CSS 적용
 - **`utils/api_client.py`**: 백엔드 API 호출 함수 (면접 실행, 재평가, 후속 질문 등)
