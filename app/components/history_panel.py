@@ -321,8 +321,12 @@ def render_history_tab() -> None:
                                 ):
                                     # 인사이트 탭에서 기본 선택 ID로 사용
                                     st.session_state["insights_selected_interview_id"] = interview_id
-                                    st.session_state["nav_selected"] = "Insights"
                                     st.session_state["nav_selected_code"] = "insights"
+                                    # 사이드바 선택 상태 초기화 후 재렌더링
+                                    if "sidebar_nav_menu" in st.session_state:
+                                        del st.session_state["sidebar_nav_menu"]
+                                    if "sidebar_nav_menu_logout" in st.session_state:
+                                        del st.session_state["sidebar_nav_menu_logout"]
                                     st.rerun()
 
                         tab1, tab2, tab3 = st.tabs(

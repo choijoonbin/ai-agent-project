@@ -176,14 +176,8 @@ def render_sidebar() -> None:
             del st.session_state["sidebar_nav_menu"]
         st.rerun()
     else:
-        # nav_selected_code 업데이트
-        # 단, member_id가 설정되어 있고 nav_selected_code가 "manager"나 "jobs"로 설정되어 있으면
-        # 로그인 성공 직후일 수 있으므로 덮어쓰지 않음
-        if st.session_state.get("member_id") and current_code in ["manager", "jobs"]:
-            # 로그인 성공 직후이므로 nav_selected_code를 유지
-            pass
-        elif selected_code == "login" and not st.session_state.get("member_id"):
-            # 로그아웃 상태에서 로그인 메뉴를 선택한 경우 명시적으로 설정
+        # nav_selected_code 업데이트 (login 처리 외에는 선택한 코드로 반영)
+        if selected_code == "login" and not st.session_state.get("member_id"):
             st.session_state["nav_selected_code"] = "login"
         else:
             st.session_state["nav_selected_code"] = selected_code

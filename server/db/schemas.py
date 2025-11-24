@@ -108,3 +108,16 @@ class ApplicationSchema(ApplicationBase):
 
     class Config:
         from_attributes = True
+
+
+class ApplicationWithMeta(BaseModel):
+    id: int
+    member_id: int
+    member_name: str
+    member_birth: str
+    recruitment_id: int
+    recruitment_title: str | None = None
+    recruitment_first_line: str | None = None
+    status: str
+    submitted_at: datetime | None = None
+    resume_path: str | None = None

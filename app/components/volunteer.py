@@ -158,7 +158,7 @@ def render_job_detail_page() -> None:
             if st.button(btn_label, use_container_width=True, key=f"detail_apply_{rec_id}"):
                 if has_active:
                     # 진행 중 공고 안내
-                    rec_list = _fetch_recruitments()
+                    rec_list = _fetch_recruitments() or []
                     rec_map = {r["id"]: (r.get("first_line") or r["title"]) for r in rec_list}
                     titles = [rec_map.get(a["recruitment_id"], f"공고 ID {a['recruitment_id']}") for a in active_apps]
                     st.info(f"이미 진행 중인 지원: {', '.join(titles)}")

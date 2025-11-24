@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from db.database import get_db
 from db import models, schemas
 from utils.doc_loader import ensure_dir
+from db import models
 
 router = APIRouter(
     prefix="/api/v1/applications",
@@ -100,6 +101,42 @@ def get_my_applications(member_id: int, db: Session = Depends(get_db)) -> List[s
         .all()
     )
     return apps
+
+
+@router.get("/all", response_model=List[schemas.ApplicationWithMeta])
+def list_all_applications(db: Session = Depends(get_db)) -> List[schemas.ApplicationWithMeta]:
+    """
+    관리자용: 전체 지원 목록 + 지원자/채용공고 메타.
+    """
+    rows = (
+        db.query(
+            models.Application,
+            models.Member,
+            models.Recruitment,
+        )
+        .join(models.Member, models.Application.member_id == models.Member.id)
+        .join(models.Recruitment, models.Application.recruitment_id == models.Recruitment.id)
+        .order_by(models.Application.submitted_at.desc())
+        .all()
+    )
+
+    results: List[schemas.ApplicationWithMeta] = []
+    for app_obj, mem, rec in rows:
+        results.append(
+            schemas.ApplicationWithMeta(
+                id=app_obj.id,
+                member_id=app_obj.member_id,
+                member_name=mem.name,
+                member_birth=mem.birth,
+                recruitment_id=app_obj.recruitment_id,
+                recruitment_title=rec.title,
+                recruitment_first_line=getattr(rec, "first_line", None),
+                status=app_obj.status,
+                submitted_at=app_obj.submitted_at,
+                resume_path=app_obj.resume_path,
+            )
+        )
+    return results
 
 
 class ApplicationStatusUpdate(BaseModel):
