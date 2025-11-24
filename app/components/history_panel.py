@@ -7,7 +7,6 @@ import json
 from typing import Any, Dict, List
 
 import streamlit as st
-import html
 
 from components.candidate_form import render_evaluation, render_questions
 
@@ -195,61 +194,16 @@ def render_history_tab() -> None:
         cache_key_state = f"history_state_{interview_id}"
 
         with st.container(border=True):
-            # --- 카드 헤더 영역 --- #
-            st.markdown(f"#### {title} - {name}")
-            st.caption(
-                f"🗓 {created_at} | 질문 수(초기): {total_questions} | 상태: {status}"
-            )
+            top_cols = st.columns([5, 1])
+            with top_cols[0]:
+                st.markdown(f"#### {title} - {name}")
+                st.caption(
+                    f"🗓 {created_at} | 질문 수(초기): {total_questions} | 상태: {status}"
+                )
 
-            col_a, col_b = st.columns([3, 1])
-
-            # ----- JD 영역: 펼치기 / 접기 토글 ----- #
-            with col_a:
-                jd_full = item.get("jd_text", "") or ""
-
-                jd_expanded_key = f"history_jd_expanded_{interview_id}"
-                if jd_expanded_key not in st.session_state:
-                    st.session_state[jd_expanded_key] = False
-
-                is_jd_expanded = st.session_state[jd_expanded_key]
-
-                if is_jd_expanded:
-                    display_text = jd_full
-                else:
-                    if len(jd_full) > 250:
-                        display_text = jd_full[:250] + "..."
-                    else:
-                        display_text = jd_full
-
-                safe_text = html.escape(display_text)
-                max_height = "none" if is_jd_expanded else "80px"
-
-                jd_box_html = f"""
-                <div style="
-                    background-color: rgba(255,255,255,0.02);
-                    padding: 10px;
-                    border-radius: 6px;
-                    border: 1px solid rgba(255,255,255,0.1);
-                    max-height: {max_height};
-                    overflow-y: auto;
-                    font-size: 0.85rem;
-                ">
-                    <pre style="white-space: pre-wrap; margin: 0;">{safe_text}</pre>
-                </div>
-                """
-                st.markdown(jd_box_html, unsafe_allow_html=True)
-
-                toggle_label = "▲ JD 접기" if is_jd_expanded else "▼ JD 전체 보기"
-                if st.button(
-                    toggle_label,
-                    key=f"jd_toggle_{interview_id}",
-                    use_container_width=True,
-                ):
-                    st.session_state[jd_expanded_key] = not is_jd_expanded
-                    st.rerun()
-
-            # ----- 이력 상세 열기 / 닫기 버튼 ----- #
-            with col_b:
+            # ----- 이력 상세 열기 / 닫기 버튼 (카드 우측 상단) ----- #
+            with top_cols[1]:
+                st.write("")  # align button to top
                 is_open = selected_id == interview_id
                 btn_label = "✖ 닫기" if is_open else "👀 이력 보기"
 
