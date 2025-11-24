@@ -220,7 +220,7 @@ def _render_contribution_chart(contrib: Dict[str, float]) -> None:
 def render_insights_page() -> None:
     """사이드바 '인사이트' 메뉴: 후보별 Soft-landing & 기여도 인사이트 대시보드."""
 
-    st.title("📊 후보 인사이트 & Soft-landing 플랜")
+    st.title("📊 후보 인사이트 & 온보딩 플랜")
 
     # ------------------------
     # 1) 인터뷰 목록 로딩

@@ -434,4 +434,34 @@ def update_recruitment_status(
     db.add(rec)
     db.commit()
     db.refresh(rec)
-    return rec
+    if isinstance(rec.keywords, str):
+        try:
+            keywords_list = json.loads(rec.keywords)
+        except Exception:
+            keywords_list = []
+    else:
+        keywords_list = rec.keywords or []
+    return schemas.RecruitmentSchema(
+        id=rec.id,
+        title=rec.title,
+        company=rec.company,
+        location=rec.location,
+        employment_type=rec.employment_type,
+        experience_level=rec.experience_level,
+        role_category=rec.role_category,
+        job_family=rec.job_family,
+        start_date=rec.start_date,
+        end_date=rec.end_date,
+        deadline=rec.deadline,
+        status=rec.status,
+        summary=rec.summary,
+        raw_text=rec.raw_text,
+        first_line=rec.first_line,
+        keywords=keywords_list,
+        file_path=rec.file_path,
+        posted_by=rec.posted_by,
+        created_at=rec.created_at,
+        experience_badge=getattr(rec, "experience_badge", None),
+        location_badge=getattr(rec, "location_badge", None),
+        requirement_keywords=getattr(rec, "requirement_keywords", None),
+    )
