@@ -49,7 +49,11 @@ AI 기반 자동화 면접 시스템으로, 채용 공고(JD)와 지원자 이�
 
 ### 5. 인터랙티브 Streamlit UI & 파일 라이브러리
 - 사이드바 네비게이션(Overview / Studio / History / Insights / Settings)로 페이지 전환
-- Studio 페이지에서 JD/이력서를 직접 입력하거나 **서버의 문서 라이브러리(docx/pdf/md/txt)**에서 불러오기
+- **Studio 페이지**: JD/이력서를 직접 입력하거나 **서버의 문서 라이브러리(docx/pdf/md/txt)**에서 불러오기
+  - 면접 실행 기능
+  - 지원 이력 조회 기능 (지원한 채용공고 및 상태 확인)
+  - 채용공고 상세 조회 기능
+  - 코드 리팩토링 완료 (가독성 및 유지보수성 개선)
 - **Insights 페이지**: 저장된 면접 정보를 기반으로 LLM이 생성한 Soft-landing 플랜, 기여도/리스크 차트, 성장 추천 등 후보자 인사이트 시각화
 
 ### 6. 지원자 지원 시스템
@@ -67,7 +71,7 @@ AI 기반 자동화 면접 시스템으로, 채용 공고(JD)와 지원자 이�
 - **컴포넌트 기반 아키텍처**: 재사용 가능한 UI 컴포넌트로 구성
   - `login.py`: 로그인/가입 페이지 (지원자 및 관리자)
   - `volunteer.py`: 지원자 지원 시스템 (채용공고 조회, 지원, 상태 확인)
-  - `candidate_form.py`: 면접 실행 탭 (JD/이력서 입력, 면접 실행)
+  - `candidate_form.py`: Studio 페이지 (JD/이력서 입력, 면접 실행, 지원 이력 조회, 채용공고 조회) - 리팩토링 완료
   - `history_panel.py`: 면접 이력 조회 및 상세 보기
   - `interview_chat.py`: 질문/답변 인터페이스 및 평가 결과 렌더링
   - `insights.py`: 후보자 인사이트 페이지 (Soft-landing, 기여도/리스크 차트)
@@ -87,7 +91,8 @@ ai-interview-agent/
 │   │   ├── overview.py         # 대시보드(Overview) 페이지
 │   │   ├── login.py            # 로그인/가입 페이지 (지원자 및 관리자)
 │   │   ├── volunteer.py        # 지원자 지원 시스템 (채용공고 조회, 지원, 상태 확인)
-│   │   ├── candidate_form.py   # 면접 실행 (Studio) + 파일 라이브러리
+│   │   ├── candidate_form.py   # Studio 페이지 (면접 실행, 지원 이력 조회, 채용공고 조회) - 리팩토링 완료
+│   │   ├── studio_back.py      # Studio 페이지 백업 파일
 │   │   ├── history_panel.py    # 면접 이력 조회/재평가
 │   │   ├── interview_chat.py   # 질문/답변 트리 렌더링
 │   │   ├── insights.py         # 후보자 인사이트 페이지 (Soft-landing, 기여도/리스크 차트)
@@ -837,7 +842,7 @@ python3 test_langfuse.py
 ---
 
 **개발자**: AI Interview Agent Team  
-**버전**: 0.3.0
+**버전**: 0.3.1
 
 ## 📦 컴포넌트 구조 상세
 
