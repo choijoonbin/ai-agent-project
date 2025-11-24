@@ -193,6 +193,12 @@ def list_recruitments(db: Session = Depends(get_db)) -> List[schemas.Recruitment
         .order_by(models.Recruitment.created_at.desc())
         .all()
     )
+    for rec in items:
+        if isinstance(rec.keywords, str):
+            try:
+                rec.keywords = json.loads(rec.keywords)
+            except Exception:
+                rec.keywords = []
     return items
 
 
@@ -224,8 +230,41 @@ def get_recruitment(
     rec.experience_badge = info["experience_badge"]
     rec.location_badge = info["location_badge"]
     rec.requirement_keywords = info["requirement_keywords"]
-    rec.keywords = json.dumps(info["requirement_keywords"], ensure_ascii=False)
-    return rec
+    if isinstance(rec.keywords, str):
+        try:
+            rec.keywords = json.loads(rec.keywords)
+        except Exception:
+            rec.keywords = []
+    else:
+        rec.keywords = info["requirement_keywords"]
+    
+    # keywords를 JSON 문자열에서 리스트로 파싱하여 스키마 생성
+    keywords_list = rec.keywords if isinstance(rec.keywords, list) else (json.loads(rec.keywords) if rec.keywords else [])
+    
+    return schemas.RecruitmentSchema(
+        id=rec.id,
+        title=rec.title,
+        company=rec.company,
+        location=rec.location,
+        employment_type=rec.employment_type,
+        experience_level=rec.experience_level,
+        role_category=rec.role_category,
+        job_family=rec.job_family,
+        start_date=rec.start_date,
+        end_date=rec.end_date,
+        deadline=rec.deadline,
+        status=rec.status,
+        summary=rec.summary,
+        raw_text=raw_text,
+        first_line=rec.first_line,
+        keywords=keywords_list,
+        file_path=rec.file_path,
+        posted_by=rec.posted_by,
+        created_at=rec.created_at,
+        experience_badge=rec.experience_badge,
+        location_badge=rec.location_badge,
+        requirement_keywords=rec.requirement_keywords,
+    )
 
 
 # ========== Admin: 업로드/목록/상태관리 ========== #

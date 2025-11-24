@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 import requests
 import streamlit as st
+from docx import Document
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:9898/api/v1")
 
@@ -100,77 +101,165 @@ def render_job_detail_page() -> None:
 
     st.markdown("---")
 
-    left, right = st.columns([1.6, 1.0], gap="large")
+    # 채용공고/모집요약 영역 접기/펼치기 상태 관리 (기본값: True)
+    detail_expanded = st.session_state.get("job_detail_expanded", True)
+    
+    # 채용공고와 모집요약 영역을 expander로 감싸기
+    with st.expander("📄 채용공고 및 모집 요약", expanded=detail_expanded):
+        # 좌측 채용공고 영역을 넓히고 우측 모집요약 영역을 30% 줄임
+        left, right = st.columns([1.9, 0.7], gap="large")
 
-    with left:
-        st.markdown("## 채용공고")
-        raw_text = rec.get("raw_text") or ""
-        file_path = rec.get("file_path")
-        file_suffix = Path(file_path).suffix.lower() if file_path else ""
+        with left:
+            st.markdown("### 채용공고")
+            raw_text = rec.get("raw_text") or ""
+            file_path = rec.get("file_path")
+            file_suffix = Path(file_path).suffix.lower() if file_path else ""
 
-        with st.container(border=True):
-            if file_path and file_suffix == ".pdf" and Path(file_path).exists():
-                try:
-                    data = Path(file_path).read_bytes()
-                    b64 = base64.b64encode(data).decode("utf-8")
-                    pdf_display = f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="700px" style="border:none;border-radius:12px;"></iframe>'
-                    st.markdown(pdf_display, unsafe_allow_html=True)
-                except Exception as e:
-                    st.warning(f"PDF 로드에 실패했습니다: {e}")
-                    st.markdown(raw_text or "원문을 불러올 수 없습니다.")
-            elif raw_text:
-                st.markdown(
-                    """
-                    <div style="
-                        max-height: 700px;
-                        overflow-y: auto;
-                        padding: 14px;
-                        background: rgba(248,250,252,0.95);
-                        border-radius: 12px;
-                        border: 1px solid rgba(148,163,184,0.35);
-                        color: #0f172a;
-                        white-space: pre-wrap;
-                        font-size: 0.95rem;
-                        line-height: 1.5;
-                    ">
-                """,
-                    unsafe_allow_html=True,
-                )
-                st.markdown(raw_text)
-                st.markdown("</div>", unsafe_allow_html=True)
-            else:
-                st.info("원문을 불러올 수 없습니다. 파일을 확인해주세요.")
-
-    with right:
-        st.markdown("### 모집 요약")
-        with st.container(border=True):
-            st.markdown(f"**지원 기간**: {rec.get('deadline') or '미정'}")
-            st.markdown(f"**회사**: {rec.get('company') or '미정'}")
-            st.markdown(f"**직무**: {rec.get('role_category') or rec.get('experience_level') or '미정'}")
-            st.markdown(f"**구분**: {rec.get('experience_level') or '미정'}")
-            st.markdown(f"**유형**: {rec.get('employment_type') or '미정'}")
-            st.markdown(f"**지역**: {rec.get('location') or '미정'}")
-
-            active_apps = [a for a in apps if a["status"] in ("SUBMITTED", "UNDER_REVIEW")] if apps else []
-            has_active = bool(active_apps)
-            btn_label = "지원 진행중" if has_active else "지원하기"
-
-            if st.button(btn_label, use_container_width=True, key=f"detail_apply_{rec_id}"):
-                if has_active:
-                    # 진행 중 공고 안내
-                    rec_list = _fetch_recruitments() or []
-                    rec_map = {r["id"]: (r.get("first_line") or r["title"]) for r in rec_list}
-                    titles = [rec_map.get(a["recruitment_id"], f"공고 ID {a['recruitment_id']}") for a in active_apps]
-                    st.info(f"이미 진행 중인 지원: {', '.join(titles)}")
+            with st.container(border=True):
+                if file_path and Path(file_path).exists():
+                    path = Path(file_path)
+                    suffix = path.suffix.lower()
+                    
+                    if suffix == ".pdf":
+                        try:
+                            data = path.read_bytes()
+                            b64 = base64.b64encode(data).decode("utf-8")
+                            st.markdown(
+                                f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="700px" style="border:none;border-radius:12px;box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);"></iframe>',
+                                unsafe_allow_html=True,
+                            )
+                        except Exception as e:
+                            st.error(f"PDF 로드 실패: {e}")
+                    elif suffix == ".docx":
+                        try:
+                            # DOCX 파일을 읽어서 HTML로 포맷팅
+                            doc = Document(str(path))
+                            html_content = '<div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); max-height: 700px; overflow-y: auto; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #1e293b;">'
+                            
+                            for para in doc.paragraphs:
+                                text = para.text.strip()
+                                if not text:
+                                    html_content += '<p style="margin: 8px 0;"></p>'
+                                    continue
+                                
+                                # 단락 스타일 확인
+                                style_name = para.style.name if para.style else "Normal"
+                                is_heading = style_name.startswith("Heading") or para.style.name.startswith("Title")
+                                
+                                if is_heading:
+                                    level = 1
+                                    if "Heading" in style_name:
+                                        try:
+                                            level = int(style_name.replace("Heading ", ""))
+                                        except:
+                                            level = 1
+                                    font_size = {1: "2em", 2: "1.5em", 3: "1.3em", 4: "1.1em"}.get(level, "1em")
+                                    font_weight = "bold"
+                                    margin = {1: "24px 0 16px", 2: "20px 0 12px", 3: "16px 0 10px"}.get(level, "12px 0 8px")
+                                    html_content += f'<h{min(level, 6)} style="font-size: {font_size}; font-weight: {font_weight}; margin: {margin}; color: #0f172a;">{text}</h{min(level, 6)}>'
+                                else:
+                                    # 일반 단락
+                                    html_content += f'<p style="margin: 8px 0; font-size: 1em; color: #334155;">{text}</p>'
+                            
+                            # 리스트 처리
+                            for para in doc.paragraphs:
+                                if para.style.name.startswith("List"):
+                                    text = para.text.strip()
+                                    if text:
+                                        html_content += f'<li style="margin: 4px 0; padding-left: 8px;">{text}</li>'
+                            
+                            html_content += '</div>'
+                            
+                            st.markdown(html_content, unsafe_allow_html=True)
+                        except Exception as e:
+                            st.error(f"DOCX 로드 실패: {e}")
+                            # 폴백: 텍스트로 표시
+                            try:
+                                doc = Document(str(path))
+                                text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+                                st.text_area("원문 텍스트", value=text, height=400, label_visibility="collapsed")
+                            except:
+                                st.error("파일을 읽을 수 없습니다.")
+                    else:
+                        # TXT, MD 등 텍스트 파일
+                        try:
+                            text = path.read_text(encoding="utf-8", errors="ignore")
+                            st.markdown(
+                                f"""
+                                <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); max-height: 700px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; line-height: 1.6; color: #1e293b;">
+                                {text}
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
+                        except Exception as e:
+                            st.error(f"파일 로드 실패: {e}")
+                elif raw_text:
+                    # 파일이 없지만 raw_text가 있는 경우
+                    st.markdown(
+                        """
+                        <div style="
+                            max-height: 700px;
+                            overflow-y: auto;
+                            padding: 14px;
+                            background: rgba(248,250,252,0.95);
+                            border-radius: 12px;
+                            border: 1px solid rgba(148,163,184,0.35);
+                            color: #0f172a;
+                            white-space: pre-wrap;
+                            font-size: 0.95rem;
+                            line-height: 1.5;
+                        ">
+                    """,
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(raw_text)
+                    st.markdown("</div>", unsafe_allow_html=True)
                 else:
-                    st.session_state["apply_target_id"] = rec_id
-                    st.session_state["detail_apply_open"] = True
-                    st.rerun()
+                    st.info("원문을 불러올 수 없습니다. 파일을 확인해주세요.")
 
-        if st.button("⬅ 목록으로", use_container_width=True):
-            st.session_state["job_detail_id"] = None
-            st.session_state["nav_selected_code"] = "jobs"
-            st.rerun()
+        with right:
+            st.markdown("### 모집 요약")
+            with st.container(border=True):
+                # 지원 기간: start_date ~ end_date
+                start_date = rec.get('start_date') or ''
+                end_date = rec.get('end_date') or ''
+                if start_date and end_date:
+                    period_text = f"{start_date} ~ {end_date}"
+                elif start_date:
+                    period_text = f"{start_date} ~"
+                elif end_date:
+                    period_text = f"~ {end_date}"
+                else:
+                    period_text = rec.get('deadline') or '미정'
+                st.markdown(f"**지원 기간**: {period_text}")
+                st.markdown(f"**회사**: {rec.get('company') or '미정'}")
+                st.markdown(f"**직무**: {rec.get('role_category') or rec.get('experience_level') or '미정'}")
+                st.markdown(f"**구분**: {rec.get('experience_level') or '미정'}")
+                st.markdown(f"**유형**: {rec.get('employment_type') or '미정'}")
+                st.markdown(f"**지역**: {rec.get('location') or '미정'}")
+
+                active_apps = [a for a in apps if a["status"] in ("SUBMITTED", "UNDER_REVIEW")] if apps else []
+                has_active = bool(active_apps)
+                btn_label = "지원 진행중" if has_active else "지원하기"
+
+                if st.button(btn_label, use_container_width=True, key=f"detail_apply_{rec_id}"):
+                    if has_active:
+                        # 진행 중 공고 안내
+                        rec_list = _fetch_recruitments() or []
+                        rec_map = {r["id"]: (r.get("first_line") or r["title"]) for r in rec_list}
+                        titles = [rec_map.get(a["recruitment_id"], f"공고 ID {a['recruitment_id']}") for a in active_apps]
+                        st.info(f"이미 진행 중인 지원: {', '.join(titles)}")
+                    else:
+                        st.session_state["apply_target_id"] = rec_id
+                        st.session_state["detail_apply_open"] = True
+                        st.session_state["job_detail_expanded"] = False  # 영역 접기
+                        st.rerun()
+
+            if st.button("⬅ 목록으로", use_container_width=True):
+                st.session_state["job_detail_id"] = None
+                st.session_state["nav_selected_code"] = "jobs"
+                st.rerun()
 
     # 상세 화면 내 지원 폼
     if st.session_state.get("detail_apply_open") and st.session_state.get("apply_target_id") == rec_id:
@@ -229,6 +318,7 @@ def render_job_detail_page() -> None:
                         st.success("지원이 제출되었습니다!")
                         st.session_state["detail_apply_open"] = False
                         st.session_state["apply_target_id"] = None
+                        st.session_state["job_detail_expanded"] = True  # 영역 펼치기
                         st.rerun()
                     except Exception as e:
                         st.error(f"지원 제출 실패: {e}")
@@ -263,7 +353,8 @@ def render_jobs_page() -> None:
     if not recs:
         return
 
-    cols = st.columns([1.2, 2.8])
+    # 필터 영역을 30% 줄이고 채용공고 목록 영역을 그만큼 늘림
+    cols = st.columns([0.84, 3.16])
     with cols[0]:
         # st.markdown("<div class='jobs-filter'>", unsafe_allow_html=True)
         st.markdown("#### 필터")
@@ -288,21 +379,33 @@ def render_jobs_page() -> None:
 
     with cols[1]:
         st.markdown("#### 채용공고 목록")
+        # 상태별 색상 정의
+        status_colors = {
+            "OPEN": "#10b981",
+            "CLOSED": "#ef4444",
+            "ARCHIVED": "#94a3b8",
+        }
+        
         for rec in filtered:
             position = rec.get("first_line") or rec.get("title")
+            status = rec.get("status", "OPEN")
+            color = status_colors.get(status, "#94a3b8")
+            
             with st.container(border=True):
-                st.markdown(
-                    f"<div style='font-size:0.9rem;color:#64748b;font-weight:600;'>채용 포지션</div>"
-                    f"<div style='font-size:1.25rem;font-weight:700;margin-top:2px;'>{position}</div>",
-                    unsafe_allow_html=True,
-                )
-                loc = rec.get("location") or ""
-                st.caption(f"{rec.get('company') or ''}{' | ' + loc if loc else ''}")
-                _render_tag_chips(rec)
-                subcol1, subcol2 = st.columns([3, 1])
-                with subcol1:
-                    st.caption(f"상태: {rec.get('status')}")
-                with subcol2:
+                # 상단: 제목, 상태 배지, 상세보기 버튼
+                col_title, col_button = st.columns([3, 1])
+                with col_title:
+                    st.markdown(
+                        f"<div style='font-size:0.9rem;color:#64748b;font-weight:600;'>채용 포지션</div>"
+                        f"<div style='font-size:1.25rem;font-weight:700;margin-top:2px;margin-bottom:4px;'>"
+                        f"{position}"
+                        f"<span style='display:inline-block;padding:3px 8px;border-radius:999px;"
+                        f"background:{color};color:white;font-weight:600;font-size:0.7rem;margin-left:12px;vertical-align:middle;'>"
+                        f"{status}</span>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                with col_button:
                     if st.button(
                         "상세보기",
                         key=f"rec_{rec['id']}",
@@ -311,6 +414,10 @@ def render_jobs_page() -> None:
                         st.session_state["job_detail_id"] = rec["id"]
                         st.session_state["nav_selected_code"] = "job_detail"
                         st.rerun()
+                
+                loc = rec.get("location") or ""
+                st.caption(f"{rec.get('company') or ''}{' | ' + loc if loc else ''}")
+                _render_tag_chips(rec)
 
     # 지원 폼
     if st.session_state.get("apply_page_open"):

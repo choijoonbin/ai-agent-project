@@ -113,8 +113,8 @@ def _status_badge(status: str) -> str:
     label = labels.get(status, status)
     color = colors.get(status, "#94a3b8")
     return (
-        f"<span style='display:inline-block;padding:6px 12px;border-radius:999px;"
-        f"background:{color};color:white;font-weight:700;font-size:0.85rem;'>{label}</span>"
+        f"<span style='display:inline-block;padding:4px 10px;border-radius:999px;"
+        f"background:{color};color:white;font-weight:600;font-size:0.75rem;margin-left:12px;vertical-align:middle;'>{label}</span>"
     )
 
 
@@ -124,75 +124,138 @@ def render_studio_page() -> None:
     st.title("🧑‍💼 면접 스튜디오")
     _render_stepper(1)
 
-    apps = fetch_applications_all()
-    if not apps:
-        st.info("등록된 지원자가 없습니다. 지원자가 제출을 완료하면 이곳에 표시됩니다.")
-        return
+    # 이력서 뷰어 닫기 후 해당 지원자 카드로 스크롤 이동
+    scroll_to_app_id = st.session_state.get("studio_scroll_to_app_id")
+    if scroll_to_app_id:
+        st.markdown(
+            f"""
+            <script>
+            (function() {{
+                function scrollToCard() {{
+                    const card = document.getElementById('app-card-{scroll_to_app_id}');
+                    if (card) {{
+                        card.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+                        // 하이라이트 효과
+                        card.style.transition = 'box-shadow 0.3s ease';
+                        card.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.5)';
+                        setTimeout(function() {{
+                            card.style.boxShadow = '';
+                        }}, 2000);
+                        return true;
+                    }}
+                    return false;
+                }}
+                // 즉시 시도
+                if (!scrollToCard()) {{
+                    // DOM이 준비되지 않았으면 재시도
+                    setTimeout(scrollToCard, 200);
+                    setTimeout(scrollToCard, 500);
+                    setTimeout(scrollToCard, 1000);
+                }}
+            }})();
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
+        # 플래그 제거
+        st.session_state["studio_scroll_to_app_id"] = None
 
-    st.markdown("#### 지원자 리스트")
+    apps = fetch_applications_all()
     selected_resume = st.session_state.get("studio_selected_resume")
     selected_resume_label = st.session_state.get("studio_selected_resume_label")
     last_agent = st.session_state.get("studio_agent_result")
 
-    for app in apps:
-        with st.container(border=True):
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.markdown(f"**{app.get('member_name','-')}** ({app.get('member_birth','-')})")
-                st.caption(app.get("recruitment_title") or app.get("recruitment_first_line") or f"공고 ID {app.get('recruitment_id')}")
-                st.markdown(_status_badge(app.get("status","SUBMITTED")), unsafe_allow_html=True)
-                st.caption(f"제출 시각: {app.get('submitted_at','-')}")
-            with col2:
-                if st.button(
-                    "이력서 보기",
-                    key=f"resume_{app['id']}",
-                    use_container_width=True,
-                    disabled=not app.get("resume_path"),
-                ):
-                    st.session_state["studio_selected_resume"] = app.get("resume_path")
-                    st.session_state["studio_selected_resume_label"] = app.get("member_name") or app["id"]
-                if st.button(
-                    "에이전트 실행",
-                    key=f"agent_{app['id']}",
-                    use_container_width=True,
-                    disabled=not app.get("resume_path"),
-                ):
-                    rec_detail = fetch_recruitment_detail(app.get("recruitment_id"))
-                    if not rec_detail:
-                        st.error("채용공고 정보를 불러오지 못했습니다.")
-                    else:
-                        resume_path = app.get("resume_path")
-                        if not resume_path or not Path(resume_path).exists():
-                            st.error("이력서 파일이 존재하지 않습니다.")
-                        else:
-                            with st.spinner("면접 에이전트 실행 중..."):
-                                try:
-                                    resume_text = load_document_text(Path(resume_path))
-                                    jd_text = rec_detail.get("raw_text") or rec_detail.get("summary") or rec_detail.get("title") or ""
-                                    payload = {
-                                        "job_title": rec_detail.get("title") or rec_detail.get("first_line") or "미정",
-                                        "candidate_name": app.get("member_name") or "지원자",
-                                        "jd_text": jd_text,
-                                        "resume_text": resume_text,
-                                        "total_questions": st.session_state.get("cfg_total_questions", 5),
-                                        "enable_rag": st.session_state.get("cfg_enable_rag", True),
-                                        "use_mini": st.session_state.get("cfg_use_mini", True),
-                                        "save_history": True,
-                                    }
-                                    resp = _post(f"{API_BASE_URL}/workflow/interview/run", payload, timeout=300)
-                                    if resp.status_code != 200:
-                                        raise RuntimeError(resp.text)
-                                    data = resp.json()
-                                    st.session_state["studio_agent_result"] = data
-                                    st.success("면접 에이전트 실행 완료")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"에이전트 실행 실패: {e}")
+    # 목록 펼침/접힘 상태 관리 (기본값: True)
+    list_expanded = st.session_state.get("studio_list_expanded", True)
+
+    # 지원자 리스트를 expander로 감싸기
+    with st.expander("📋 지원자 리스트", expanded=list_expanded):
+        if not apps:
+            st.info("등록된 지원자가 없습니다. 지원자가 제출을 완료하면 이곳에 표시됩니다.")
+        else:
+            for app in apps:
+                st.markdown(f'<div id="app-card-{app["id"]}">', unsafe_allow_html=True)
+                with st.container(border=True):
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.markdown(f"**{app.get('member_name','-')}** ({app.get('member_birth','-')})")
+                        recruitment_title = app.get("recruitment_title") or app.get("recruitment_first_line") or f"공고 ID {app.get('recruitment_id')}"
+                        status = app.get("status","SUBMITTED")
+                        st.markdown(f"<div style='margin-bottom:4px;'>{recruitment_title}{_status_badge(status)}</div>", unsafe_allow_html=True)
+                        st.caption(f"제출 시각: {app.get('submitted_at','-')}")
+                    with col2:
+                        if st.button(
+                            "이력서 보기",
+                            key=f"resume_{app['id']}",
+                            use_container_width=True,
+                            disabled=not app.get("resume_path"),
+                        ):
+                            st.session_state["studio_selected_resume"] = app.get("resume_path")
+                            st.session_state["studio_selected_resume_label"] = app.get("member_name") or app["id"]
+                            st.session_state["studio_list_expanded"] = False  # 목록 접기
+                            st.session_state["studio_scroll_to_viewer"] = True
+                            st.rerun()
+                        if st.button(
+                            "에이전트 실행",
+                            key=f"agent_{app['id']}",
+                            use_container_width=True,
+                            disabled=not app.get("resume_path"),
+                        ):
+                            rec_detail = fetch_recruitment_detail(app.get("recruitment_id"))
+                            if not rec_detail:
+                                st.error("채용공고 정보를 불러오지 못했습니다.")
+                            else:
+                                resume_path = app.get("resume_path")
+                                if not resume_path or not Path(resume_path).exists():
+                                    st.error("이력서 파일이 존재하지 않습니다.")
+                                else:
+                                    with st.spinner("면접 에이전트 실행 중..."):
+                                        try:
+                                            resume_text = load_document_text(Path(resume_path))
+                                            jd_text = rec_detail.get("raw_text") or rec_detail.get("summary") or rec_detail.get("title") or ""
+                                            payload = {
+                                                "job_title": rec_detail.get("title") or rec_detail.get("first_line") or "미정",
+                                                "candidate_name": app.get("member_name") or "지원자",
+                                                "jd_text": jd_text,
+                                                "resume_text": resume_text,
+                                                "total_questions": st.session_state.get("cfg_total_questions", 5),
+                                                "enable_rag": st.session_state.get("cfg_enable_rag", True),
+                                                "use_mini": st.session_state.get("cfg_use_mini", True),
+                                                "save_history": True,
+                                            }
+                                            resp = _post(f"{API_BASE_URL}/workflow/interview/run", payload, timeout=300)
+                                            if resp.status_code != 200:
+                                                raise RuntimeError(resp.text)
+                                            data = resp.json()
+                                            st.session_state["studio_agent_result"] = data
+                                            st.success("면접 에이전트 실행 완료")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"에이전트 실행 실패: {e}")
+                st.markdown('</div>', unsafe_allow_html=True)
 
     # 선택한 이력서 뷰어
     if selected_resume:
+        st.markdown('<div id="resume-viewer-anchor"></div>', unsafe_allow_html=True)
         st.markdown("---")
-        st.markdown(f"### 이력서 뷰어 - {selected_resume_label}")
+        
+        # 닫기 버튼 (뷰어 위에 배치)
+        col_title, col_close = st.columns([3, 1])
+        with col_title:
+            st.markdown(f"### 이력서 뷰어 - {selected_resume_label}")
+        with col_close:
+            if st.button("✕ 닫기", use_container_width=True, key="close_resume_viewer"):
+                # 이력서 뷰어가 열려있던 지원자 카드 ID 찾기
+                current_apps = fetch_applications_all()
+                for app in current_apps:
+                    if app.get("resume_path") == selected_resume:
+                        st.session_state["studio_scroll_to_app_id"] = app["id"]
+                        break
+                st.session_state["studio_selected_resume"] = None
+                st.session_state["studio_selected_resume_label"] = None
+                st.session_state["studio_list_expanded"] = True  # 목록 펼치기
+                st.rerun()
+        
         path = Path(selected_resume)
         if path.exists():
             suffix = path.suffix.lower()
@@ -212,6 +275,43 @@ def render_studio_page() -> None:
                     st.error(f"이력서 로드 실패: {e}")
         else:
             st.warning("이력서 파일을 찾을 수 없습니다.")
+        
+        # 이력서 뷰어로 스크롤
+        if st.session_state.get("studio_scroll_to_viewer", False):
+            st.markdown(
+                """
+                <script>
+                (function() {
+                    function scrollToViewer() {
+                        const anchor = document.getElementById('resume-viewer-anchor');
+                        if (anchor) {
+                            const elementPosition = anchor.getBoundingClientRect().top;
+                            const offsetPosition = elementPosition + window.pageYOffset - 80;
+                            window.scrollTo({
+                                top: offsetPosition,
+                                behavior: 'smooth'
+                            });
+                            return true;
+                        }
+                        return false;
+                    }
+                    if (document.readyState === 'complete') {
+                        setTimeout(scrollToViewer, 500);
+                        setTimeout(scrollToViewer, 1000);
+                        setTimeout(scrollToViewer, 1500);
+                    } else {
+                        window.addEventListener('load', function() {
+                            setTimeout(scrollToViewer, 500);
+                            setTimeout(scrollToViewer, 1000);
+                            setTimeout(scrollToViewer, 1500);
+                        });
+                    }
+                })();
+                </script>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.session_state["studio_scroll_to_viewer"] = False
 
     # 에이전트 실행 결과 표시
     if last_agent:

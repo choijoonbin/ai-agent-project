@@ -85,7 +85,8 @@ def render_sidebar() -> None:
         highlight_code = current_code
         if current_code not in codes:
             if current_code == "job_detail":
-                highlight_code = codes[0]
+                # job_detail 페이지에서는 메뉴 하이라이트를 jobs로 설정 (지원자) 또는 첫 항목으로
+                highlight_code = codes[0] if codes else "jobs"
             else:
                 current_code = codes[0]
                 highlight_code = codes[0]
@@ -150,9 +151,36 @@ def render_sidebar() -> None:
     except ValueError:
         selected_code = current_code  # 알 수 없는 경우 기존 값 유지
 
-    # job_detail 같은 내부 코드가 메뉴에 없을 때는 현재 값을 유지
+    # option_menu의 key를 사용하여 실제로 사용자가 클릭했는지 확인
+    # option_menu는 사용자가 클릭했을 때만 key의 값이 변경됨
+    menu_key_prev = f"{menu_key}_prev_selection"
+    prev_selection = st.session_state.get(menu_key_prev)
+    user_clicked = (prev_selection is not None and prev_selection != selected_label)
+    
+    # job_detail 같은 내부 코드가 메뉴에 없을 때의 처리
     if current_code not in codes:
-        selected_code = current_code
+        if selected_code not in codes:
+            # 둘 다 codes에 없으면 현재 값 유지
+            selected_code = current_code
+        elif default_index < len(codes) and selected_code == codes[default_index]:
+            # selected_code가 현재 하이라이트된 메뉴와 같으면
+            # 사용자가 실제로 클릭했는지 확인
+            if not user_clicked:
+                # 사용자가 클릭하지 않았으면 내부 페이지 전환으로 간주하여 current_code 유지
+                selected_code = current_code
+            else:
+                # 사용자가 클릭했으면 selected_code 사용
+                st.session_state[menu_key_prev] = selected_label
+        else:
+            # selected_code가 codes에 있고 default_index와 다르면 사용자가 다른 메뉴를 선택한 것이므로 그대로 사용
+            st.session_state[menu_key_prev] = selected_label
+    else:
+        # current_code가 codes에 있으면 (일반적인 메뉴 페이지: jobs, status 등)
+        # 사용자가 실제로 클릭했을 때만 prev_selection 업데이트
+        if user_clicked:
+            st.session_state[menu_key_prev] = selected_label
+        # 사용자가 클릭하지 않았으면 prev_selection을 업데이트하지 않아서,
+        # 나중에 내부 페이지 전환(job_detail)이 가능하도록 함
 
     # 로그아웃 처리: 기존에 로그인된 상태에서 login을 선택한 경우에만 클리어 및 rerun
     if selected_code == "login" and current_code != "login":
@@ -201,7 +229,7 @@ def render_sidebar() -> None:
             label = "▾" if is_open else "▸"
             if st.button(label, key="sidebar_settings_toggle"):
                 st.session_state["sidebar_show_settings"] = not is_open
-                st.rerun()
+            st.rerun()
 
         # 접힌 상태면 여기서 바로 리턴
         if not st.session_state.get("sidebar_show_settings", False):
