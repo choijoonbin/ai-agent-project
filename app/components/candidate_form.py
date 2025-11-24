@@ -12,6 +12,8 @@ import streamlit as st
 from docx import Document
 from PyPDF2 import PdfReader
 
+from utils.time_utils import format_to_kst
+
 # 과거 면접 렌더링 유틸 (History에서 사용)
 from components.studio_back import render_evaluation, render_questions
 
@@ -26,6 +28,10 @@ def _get(url: str, *, timeout: int = 30) -> requests.Response:
 
 def _post(url: str, payload: Dict[str, Any], *, timeout: int = 120) -> requests.Response:
     return requests.post(url, json=payload, timeout=timeout)
+
+
+def _patch(url: str, payload: Dict[str, Any], *, timeout: int = 30) -> requests.Response:
+    return requests.patch(url, json=payload, timeout=timeout)
 
 
 def fetch_applications_all() -> List[Dict[str, Any]]:
@@ -98,7 +104,7 @@ def _render_stepper(current: int) -> None:
 def _status_badge(status: str) -> str:
     labels = {
         "SUBMITTED": "지원완료",
-        "UNDER_REVIEW": "담당자 확인중",
+        "UNDER_REVIEW": "심사중",
         "PASSED": "합격",
         "REJECTED": "불합격",
         "CANCELLED": "지원취소",
@@ -182,7 +188,8 @@ def render_studio_page() -> None:
                         recruitment_title = app.get("recruitment_title") or app.get("recruitment_first_line") or f"공고 ID {app.get('recruitment_id')}"
                         status = app.get("status","SUBMITTED")
                         st.markdown(f"<div style='margin-bottom:4px;'>{recruitment_title}{_status_badge(status)}</div>", unsafe_allow_html=True)
-                        st.caption(f"제출 시각: {app.get('submitted_at','-')}")
+                        submitted_at = format_to_kst(app.get("submitted_at"))
+                        st.caption(f"제출 시각: {submitted_at}")
                     with col2:
                         if st.button(
                             "이력서 보기",
@@ -209,6 +216,19 @@ def render_studio_page() -> None:
                                 if not resume_path or not Path(resume_path).exists():
                                     st.error("이력서 파일이 존재하지 않습니다.")
                                 else:
+                                    # 상태를 심사중으로 전환
+                                    try:
+                                        resp = _patch(
+                                            f"{API_BASE_URL}/applications/{app['id']}/status",
+                                            {"status": "UNDER_REVIEW"},
+                                        )
+                                        if resp.status_code != 200:
+                                            st.warning("지원 상태 업데이트에 실패했습니다.")
+                                        else:
+                                            app["status"] = "UNDER_REVIEW"
+                                    except Exception as patch_error:
+                                        st.warning(f"지원 상태 업데이트 중 오류가 발생했습니다: {patch_error}")
+
                                     with st.spinner("면접 에이전트 실행 중..."):
                                         try:
                                             resume_text = load_document_text(Path(resume_path))

@@ -11,6 +11,8 @@ import requests
 import streamlit as st
 from docx import Document
 
+from utils.time_utils import format_to_kst
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:9898/api/v1")
 
 
@@ -505,7 +507,7 @@ def render_status_page() -> None:
 
     status_labels = {
         "SUBMITTED": "지원완료",
-        "UNDER_REVIEW": "담당자 확인중",
+        "UNDER_REVIEW": "심사중",
         "PASSED": "합격",
         "REJECTED": "불합격",
         "CANCELLED": "지원취소",
@@ -523,7 +525,15 @@ def render_status_page() -> None:
         with st.container(border=True):
             c1, c2 = st.columns([3, 1])
             with c1:
-                st.markdown(f"**{title}**")
+                st.markdown(
+                    f"<div style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;'>"
+                    f"<span style='font-weight:700;font-size:1.05rem;'>{title}</span>"
+                    f"<span style='display:inline-block;padding:3px 10px;border-radius:999px;"
+                    f"background:{color};color:white;font-weight:600;font-size:0.75rem;'>"
+                    f"{label}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
                 meta_parts = []
                 if company:
                     meta_parts.append(company)
@@ -532,14 +542,8 @@ def render_status_page() -> None:
                 if meta_parts:
                     st.caption(" | ".join(meta_parts))
 
-                st.markdown(
-                    f"<span style='display:inline-block;padding:6px 12px;border-radius:999px;"
-                    f"background:{color};color:white;font-weight:700;font-size:0.85rem;'>"
-                    f"{label}</span>",
-                    unsafe_allow_html=True,
-                )
-
-                st.caption(f"제출 시각: {app.get('submitted_at','-')}")
+                submitted_at = format_to_kst(app.get("submitted_at"))
+                st.caption(f"제출 시각: {submitted_at}")
 
             with c2:
                 if status in ("SUBMITTED", "UNDER_REVIEW"):

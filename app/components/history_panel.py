@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 import streamlit as st
 
 from components.candidate_form import render_evaluation, render_questions
+from utils.time_utils import format_to_kst
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:9898/api/v1")
 
@@ -187,7 +188,7 @@ def render_history_tab() -> None:
         interview_id = item["id"]
         title = item["job_title"]
         name = item["candidate_name"]
-        created_at = item["created_at"]
+        created_at = format_to_kst(item.get("created_at"))
         total_questions = item["total_questions"]
         status = item["status"]
 
