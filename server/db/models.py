@@ -78,10 +78,17 @@ class Recruitment(Base):
     employment_type = Column(String(50), nullable=True)  # 정규/계약 등
     experience_level = Column(String(50), nullable=True)  # 신입/경력/무관
     role_category = Column(String(255), nullable=True)  # 직무/카테고리
+    job_family = Column(String(255), nullable=True)  # 직군/직렬
+    start_date = Column(String(50), nullable=True)
+    end_date = Column(String(50), nullable=True)
     deadline = Column(String(100), nullable=True)
-    status = Column(String(20), nullable=False, default="OPEN")  # OPEN/CLOSED
+    status = Column(String(20), nullable=False, default="OPEN")  # OPEN/CLOSED/ARCHIVED
     summary = Column(Text, nullable=True)
+    raw_text = Column(Text, nullable=True)
+    first_line = Column(String(500), nullable=True)
+    keywords = Column(Text, nullable=True)  # JSON 직렬화
     file_path = Column(String(1024), nullable=False)
+    posted_by = Column(Integer, nullable=True)  # 업로더 ID
 
     created_at = Column(
         DateTime(timezone=True),

@@ -60,11 +60,17 @@ class RecruitmentBase(BaseModel):
     employment_type: str | None = None
     experience_level: str | None = None
     role_category: str | None = None
+    job_family: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
     deadline: str | None = None
     status: str = "OPEN"
     summary: str | None = None
     file_path: str
     raw_text: str | None = None
+    first_line: str | None = None
+    keywords: list[str] | None = None
+    posted_by: int | None = None
     first_line: str | None = None
     experience_badge: str | None = None
     location_badge: str | None = None
@@ -81,6 +87,11 @@ class RecruitmentSchema(RecruitmentBase):
 
     class Config:
         from_attributes = True
+
+
+class RecruitmentAdminSchema(RecruitmentSchema):
+    applicant_count: int = 0
+    last_application_at: datetime | None = None
 
 
 # -------- Applications -------- #

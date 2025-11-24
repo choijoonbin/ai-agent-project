@@ -18,6 +18,7 @@ if str(APP_DIR) not in sys.path:
 from utils.state_manager import init_app_session_state, apply_theme_css
 from components.sidebar import render_sidebar
 from components.candidate_form import render_studio_page
+from components.recruitment_admin import render_recruit_admin_page
 from components.history_panel import render_history_tab
 from components.overview import render_overview_page
 from components.insights import render_insights_page  # 인사이트 페이지
@@ -94,6 +95,9 @@ def main() -> None:
 
     elif nav_code == "studio":
         render_studio_page()
+
+    elif nav_code == "recruit_admin":
+        render_recruit_admin_page()
 
     elif nav_code == "history":
         render_history_tab()

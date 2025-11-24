@@ -67,11 +67,19 @@ AI 기반 자동화 면접 시스템으로, 채용 공고(JD)와 지원자 이�
 - **세션 관리**: Streamlit 세션 상태를 통한 로그인 상태 유지
 - **자동 리다이렉트**: 로그인 상태에 따른 페이지 자동 전환
 
-### 8. 모듈화된 UI 컴포넌트
+### 8. 채용공고 관리 시스템 (관리자용)
+- **채용공고 등록**: PDF, DOCX, TXT, MD 파일 업로드 및 메타데이터 입력
+- **채용공고 목록 조회**: 등록된 채용공고 목록 조회 (접기/펼치기 기능)
+- **상태 관리**: 채용공고 상태 변경 (OPEN, CLOSED, ARCHIVED)
+- **파일 뷰어**: PDF 및 DOCX 파일을 깔끔한 뷰어로 표시
+- **UI/UX 개선**: 카드 기반 레이아웃, 간격 조정, 스크롤 및 포커싱 기능
+
+### 9. 모듈화된 UI 컴포넌트
 - **컴포넌트 기반 아키텍처**: 재사용 가능한 UI 컴포넌트로 구성
   - `login.py`: 로그인/가입 페이지 (지원자 및 관리자)
   - `volunteer.py`: 지원자 지원 시스템 (채용공고 조회, 지원, 상태 확인)
   - `candidate_form.py`: Studio 페이지 (JD/이력서 입력, 면접 실행, 지원 이력 조회, 채용공고 조회) - 리팩토링 완료
+  - `recruitment_admin.py`: 채용공고 관리 페이지 (관리자용 - 채용공고 등록, 목록 조회, 상태 변경, 파일 뷰어)
   - `history_panel.py`: 면접 이력 조회 및 상세 보기
   - `interview_chat.py`: 질문/답변 인터페이스 및 평가 결과 렌더링
   - `insights.py`: 후보자 인사이트 페이지 (Soft-landing, 기여도/리스크 차트)
@@ -92,6 +100,7 @@ ai-interview-agent/
 │   │   ├── login.py            # 로그인/가입 페이지 (지원자 및 관리자)
 │   │   ├── volunteer.py        # 지원자 지원 시스템 (채용공고 조회, 지원, 상태 확인)
 │   │   ├── candidate_form.py   # Studio 페이지 (면접 실행, 지원 이력 조회, 채용공고 조회) - 리팩토링 완료
+│   │   ├── recruitment_admin.py # 채용공고 관리 페이지 (관리자용)
 │   │   ├── studio_back.py      # Studio 페이지 백업 파일
 │   │   ├── history_panel.py    # 면접 이력 조회/재평가
 │   │   ├── interview_chat.py   # 질문/답변 트리 렌더링
@@ -131,7 +140,7 @@ ai-interview-agent/
 │   │   ├── history.py          # 면접 이력 조회 API
 │   │   ├── files.py            # JD/이력서 파일 목록 & 본문 API
 │   │   ├── auth.py             # 인증 API (로그인/가입)
-│   │   ├── recruitments.py     # 채용공고 관리 API
+│   │   ├── recruitments.py     # 채용공고 관리 API (등록, 조회, 상태 변경)
 │   │   └── applications.py     # 지원 이력 관리 API
 │   │
 │   ├── db/                      # 데이터베이스
@@ -149,6 +158,7 @@ ai-interview-agent/
 │       │   ├── frontend/       # 프론트엔드 포지션 관련 문서
 │       │   ├── devops/         # DevOps 포지션 관련 문서
 │       │   └── ...            # 기타 포지션별 문서
+│       ├── recruitment/         # 채용공고 파일 저장 경로
 │       ├── resumes/             # 지원자 이력서 파일 저장 경로
 │       └── vector_store/        # FAISS 인덱스 저장 경로
 │
@@ -842,7 +852,7 @@ python3 test_langfuse.py
 ---
 
 **개발자**: AI Interview Agent Team  
-**버전**: 0.3.1
+**버전**: 0.3.2
 
 ## 📦 컴포넌트 구조 상세
 
@@ -874,6 +884,7 @@ app/
 - **`components/sidebar.py`**: 네비게이션/설정 UI, RAG 옵션, 질문 개수 등 제어, 로그인/로그아웃 처리
 - **`components/login.py`**: 로그인/가입 페이지 (지원자: 이름/생년월일, 관리자: 이름)
 - **`components/volunteer.py`**: 지원자 지원 시스템 (채용공고 조회, 지원서 제출, 지원 상태 확인)
+- **`components/recruitment_admin.py`**: 채용공고 관리 페이지 (관리자용 - 등록, 목록 조회, 상태 변경, 파일 뷰어)
 - **`components/overview.py`**: 대시보드 소개 및 빠른 액션(Studio/History 이동)
 - **`components/candidate_form.py`**: Studio 화면, JD/이력서 텍스트 입력 + 파일 라이브러리, 면접 실행
 - **`components/interview_chat.py`**: 질문/답변 트리 구조 렌더링, 평가 결과 표시

@@ -139,11 +139,9 @@ def render_studio_page() -> None:
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.markdown(f"**{app.get('member_name','-')}** ({app.get('member_birth','-')})")
-                st.caption(app.get("recruitment_first_line") or app.get("recruitment_title") or f"공고 ID {app.get('recruitment_id')}")
+                st.caption(app.get("recruitment_title") or app.get("recruitment_first_line") or f"공고 ID {app.get('recruitment_id')}")
                 st.markdown(_status_badge(app.get("status","SUBMITTED")), unsafe_allow_html=True)
                 st.caption(f"제출 시각: {app.get('submitted_at','-')}")
-                if app.get("resume_path"):
-                    st.caption(f"이력서 파일: {app['resume_path']}")
             with col2:
                 if st.button(
                     "이력서 보기",

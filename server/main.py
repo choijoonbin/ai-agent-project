@@ -14,6 +14,7 @@ if server_dir not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from utils.config import settings
 from db.database import Base, engine
@@ -38,6 +39,23 @@ def create_app() -> FastAPI:
 
     # DB 테이블 생성
     Base.metadata.create_all(bind=engine)
+
+    # 루트 경로 핸들러 추가 (404 방지)
+    @app.get("/")
+    async def root():
+        return JSONResponse(
+            content={
+                "message": "AI Interview Agent API",
+                "version": "0.1.0",
+                "status": "running",
+                "docs": "/docs",
+            }
+        )
+
+    # 헬스체크 엔드포인트
+    @app.get("/health")
+    async def health_check():
+        return JSONResponse(content={"status": "healthy"})
 
     # 라우터 등록
     app.include_router(workflow.router)

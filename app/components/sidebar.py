@@ -54,9 +54,9 @@ def render_sidebar() -> None:
 
     role = st.session_state.get("member_role")
     if role == "ADMIN":
-        labels = ["관리자 홈", "면접 스튜디오", "면접 이력", "인사이트", "설정", "로그아웃"]
-        codes = ["manager", "studio", "history", "insights", "settings", "login"]
-        icons = ["shield-lock", "person-badge", "book", "bar-chart", "gear", "box-arrow-left"]
+        labels = ["관리자 홈", "면접 스튜디오", "면접 이력", "채용공고 관리", "인사이트", "설정", "로그아웃"]
+        codes = ["manager", "studio", "history", "recruit_admin", "insights", "settings", "login"]
+        icons = ["shield-lock", "person-badge", "book", "folder", "bar-chart", "gear", "box-arrow-left"]
     elif role:  # 지원자
         labels = ["Jobs", "Status", "로그아웃"]
         codes = ["jobs", "status", "login"]
