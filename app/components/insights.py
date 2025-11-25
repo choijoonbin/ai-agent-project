@@ -82,46 +82,115 @@ def _safe_get_scores(evaluation: Dict[str, Any]) -> Dict[str, float]:
 
 def _estimate_contribution(scores: Dict[str, float]) -> Dict[str, float]:
     """
-    간단한 규칙 기반 '단기/장기 기여도' 추정.
-    - 기술 관련 점수 평균 → 단기 기여도
-    - 성장/학습/잠재력 관련 키워드 평균 → 장기 기여도
-    점수가 없으면 기본 3.0 으로 설정.
+    규칙 기반 '단기/장기 기여도' 추정.
+    
+    **단기 기여도 계산 기준:**
+    - 즉시 활용 가능한 기술/실무 역량 점수 평균
+    - 포함 역량: 기술 역량, 문제해결, 성능 최적화, 품질 관리, 커뮤니케이션, 리더십 등
+    - 즉시 프로젝트에 투입되어 기여할 수 있는 역량
+    
+    **장기 성장성 계산 기준:**
+    - 성장 잠재력과 학습 능력을 나타내는 역량 점수 평균
+    - 포함 역량: 학습 능력, 적응력, 잠재력, 혁신성, 리더십(장기 관점), 문제해결(복잡한 문제)
+    - 회사와 함께 성장하며 장기적으로 기여할 수 있는 역량
+    - 단기 기여도와의 차이: 현재 역량 대비 성장 가능성
+    
+    **계산 방식:**
+    1. 단기 기여도: 기술/실무 역량들의 가중 평균 (기술 역량, 문제해결, 성능 최적화 등)
+    2. 장기 성장성: 전체 역량 평균에서 단기 기여도와의 차이를 고려하여 계산
+       - 전체 역량이 높으면 성장성도 높음
+       - 단기 기여도 대비 전체 역량의 균형을 고려
     """
     if not scores:
         return {"short_term": 3.0, "long_term": 3.0}
 
-    tech_keys = ["기술", "백엔드", "프론트엔드", "문제 해결", "Problem", "Tech"]
-    growth_keys = ["성장", "학습", "잠재력", "Growth", "Potential"]
+    # 단기 기여도: 즉시 활용 가능한 기술/실무 역량
+    # 기술 역량, 문제해결, 성능 최적화, 품질 관리, 커뮤니케이션, 리더십 등
+    short_term_keys = [
+        "기술", "백엔드", "프론트엔드", "문제해결", "문제 해결", "Problem", "Tech",
+        "성능", "최적화", "품질", "커뮤니케이션", "리더십", "리딩",
+        "테스트", "자동화", "아키텍처", "설계", "개발", "코딩"
+    ]
+    
+    # 장기 성장성: 성장 잠재력과 학습 능력
+    # 학습 능력, 적응력, 잠재력, 혁신성 등 (명시적으로 있는 경우)
+    long_term_keys = [
+        "성장", "학습", "잠재력", "Growth", "Potential", "적응", "혁신",
+        "개발", "향상", "진화", "변화"
+    ]
 
     def _avg_for(keys: List[str]) -> float | None:
         vals = []
         for name, score in scores.items():
-            if any(k in name for k in keys):
+            name_lower = name.lower()
+            if any(k.lower() in name_lower for k in keys):
                 vals.append(score)
         if not vals:
             return None
         return sum(vals) / len(vals)
 
-    short = _avg_for(tech_keys)
-    long = _avg_for(growth_keys)
-
-    # 기본값 보정
+    # 단기 기여도: 기술/실무 역량 평균
+    short = _avg_for(short_term_keys)
+    
+    # 전체 평균 계산
     base_avg = sum(scores.values()) / len(scores) if scores else 3.0
+    
+    # 단기 기여도가 없으면 전체 평균 사용
     if short is None:
         short = base_avg
-    if long is None:
+    
+    # 장기 성장성: 명시적 성장 관련 역량이 있으면 그것을 사용, 없으면 전체 역량의 균형 고려
+    long_explicit = _avg_for(long_term_keys)
+    
+    if long_explicit is not None:
+        # 명시적 성장 역량이 있으면 그것을 사용
+        long = long_explicit
+    else:
+        # 명시적 성장 역량이 없으면:
+        # 1. 전체 역량 평균을 기본값으로 사용
+        # 2. 단기 기여도와의 차이를 고려하여 조정
+        #    - 단기 기여도가 높으면 장기 성장성도 비슷하게 높게 설정 (균형 잡힌 역량)
+        #    - 단기 기여도가 낮으면 장기 성장성도 낮게 설정
+        #    - 단, 전체 역량이 다양하면 성장 가능성이 있다고 판단
         long = base_avg
+        
+        # 역량의 다양성 고려: 역량 종류가 많고 점수가 고르면 성장 가능성 높음
+        if len(scores) >= 5:
+            # 역량이 다양하면 성장 가능성에 보너스 (최대 0.3점)
+            score_variance = sum((v - base_avg) ** 2 for v in scores.values()) / len(scores)
+            if score_variance < 1.0:  # 점수가 고르게 분포
+                long = min(5.0, base_avg + 0.2)
+            else:
+                long = base_avg
+        else:
+            long = base_avg
+    
+    # 온보딩 로드맵 완수 시 예상 기여도 향상을 장기 성장성에 반영
+    # 낮은 점수의 역량이 있으면 온보딩을 통해 개선 가능성이 높다고 판단
+    if scores:
+        low_scores = [score for score in scores.values() if score < 3.5]
+        if low_scores:
+            # 낮은 점수 역량이 많을수록 온보딩을 통한 개선 여지가 큼
+            improvement_potential = min(0.5, len(low_scores) * 0.15)  # 최대 0.5점 보너스
+            long = min(5.0, long + improvement_potential)
+        
+        # 역량의 균형도 고려: 점수가 고르지 않으면 온보딩을 통해 균형 개선 가능
+        score_range = max(scores.values()) - min(scores.values())
+        if score_range > 1.5:  # 점수 차이가 크면
+            balance_improvement = min(0.3, (score_range - 1.5) * 0.2)  # 최대 0.3점 보너스
+            long = min(5.0, long + balance_improvement)
 
     # 1~5 사이로 클램프
     short = max(1.0, min(5.0, short))
     long = max(1.0, min(5.0, long))
+    
     return {"short_term": short, "long_term": long}
 
 
-def _build_soft_landing_plan(evaluation: Dict[str, Any]) -> Dict[str, List[str]]:
+def _build_soft_landing_plan(evaluation: Dict[str, Any], scores: Dict[str, float] = None) -> Dict[str, List[str]]:
     """
     evaluation 의 strengths / weaknesses / recommendation 을 활용해
-    30/60/90일 Soft-landing 플랜을 간단히 구성.
+    30/60/90일 온보딩 플랜을 구성하고, 기여도 향상을 위한 목표를 포함.
     (향후 백엔드 AI 인사이트 API 로 대체 가능)
     """
     strengths = evaluation.get("strengths") or []
@@ -131,6 +200,11 @@ def _build_soft_landing_plan(evaluation: Dict[str, Any]) -> Dict[str, List[str]]
     plan_30: List[str] = []
     plan_60: List[str] = []
     plan_90: List[str] = []
+    
+    # 기여도 향상 목표
+    contribution_goals_30: List[str] = []
+    contribution_goals_60: List[str] = []
+    contribution_goals_90: List[str] = []
 
     if strengths:
         plan_30.append("팀 온보딩 기간 동안 아래 강점을 바로 활용할 수 있도록 초기 과제를 설계하세요:")
@@ -156,6 +230,50 @@ def _build_soft_landing_plan(evaluation: Dict[str, Any]) -> Dict[str, List[str]]
         plan_60.append("중간 온보딩 플랜: 작은 기능을 단독으로 설계/구현하고 코드리뷰를 통해 피드백 순환 구축.")
     if not plan_90:
         plan_90.append("장기 온보딩 플랜: 담당 영역 정의, 기술/업무 목표 수립, 6~12개월 성장 로드맵 수립.")
+
+    # 기여도 향상을 위한 목표 추가
+    if scores:
+        # 낮은 점수의 역량 식별
+        low_scores = [(name, score) for name, score in scores.items() if score < 3.5]
+        if low_scores:
+            low_scores.sort(key=lambda x: x[1])  # 점수 낮은 순으로 정렬
+            
+            # 30일 목표: 가장 낮은 역량 1-2개 개선
+            if len(low_scores) >= 1:
+                contribution_goals_30.append("**기여도 향상 목표 (30일):**")
+                for name, score in low_scores[:2]:
+                    target = min(5.0, score + 0.5)  # 0.5점 향상 목표
+                    contribution_goals_30.append(f"- {name}: {score:.1f} → {target:.1f}점 목표")
+            
+            # 60일 목표: 중간 수준 역량 개선
+            mid_scores = [(name, score) for name, score in scores.items() if 3.0 <= score < 4.0]
+            if mid_scores:
+                contribution_goals_60.append("**기여도 향상 목표 (60일):**")
+                for name, score in mid_scores[:2]:
+                    target = min(5.0, score + 0.7)  # 0.7점 향상 목표
+                    contribution_goals_60.append(f"- {name}: {score:.1f} → {target:.1f}점 목표")
+            
+            # 90일 목표: 전체 역량 균형 개선
+            avg_score = sum(scores.values()) / len(scores)
+            if avg_score < 4.0:
+                contribution_goals_90.append("**기여도 향상 목표 (90일):**")
+                contribution_goals_90.append(f"- 전체 역량 평균: {avg_score:.1f} → {min(5.0, avg_score + 0.8):.1f}점 목표")
+                contribution_goals_90.append("- 핵심 역량 2-3개를 4.0점 이상으로 향상")
+        else:
+            # 모든 역량이 3.5 이상인 경우: 고도화 목표
+            contribution_goals_30.append("**기여도 향상 목표 (30일):**")
+            contribution_goals_30.append("- 핵심 역량 1개를 4.5점 이상으로 고도화")
+            
+            contribution_goals_60.append("**기여도 향상 목표 (60일):**")
+            contribution_goals_60.append("- 전체 역량을 4.0점 이상으로 유지하며 전문성 강화")
+            
+            contribution_goals_90.append("**기여도 향상 목표 (90일):**")
+            contribution_goals_90.append("- 리더십 및 멘토링 역량 개발로 팀 기여도 확대")
+
+    # 온보딩 플랜과 기여도 향상 목표 통합
+    plan_30.extend(contribution_goals_30)
+    plan_60.extend(contribution_goals_60)
+    plan_90.extend(contribution_goals_90)
 
     return {"30": plan_30, "60": plan_60, "90": plan_90}
 
@@ -210,8 +328,15 @@ def _render_score_chart(scores: Dict[str, float]) -> None:
         alt.Chart(df)
         .mark_bar()
         .encode(
-            x=alt.X("역량:N", axis=alt.Axis(labelAngle=0)),
-            y=alt.Y("점수:Q", scale=alt.Scale(domain=[0, 5])),
+            x=alt.X("역량:N", axis=alt.Axis(labelAngle=-45, labelLimit=100)),  # 레이블 각도 조정 및 길이 제한 증가
+            y=alt.Y(
+                "점수:Q",
+                scale=alt.Scale(domain=[0, 5], nice=False),  # nice=False로 항상 0-5 범위 고정
+                axis=alt.Axis(
+                    values=[0, 1, 2, 3, 4, 5],  # y축 눈금을 0, 1, 2, 3, 4, 5로 명시적 설정
+                    title="점수 (만점: 5점)"
+                )
+            ),
             tooltip=["역량", "점수"],
         )
         .properties(height=260)
@@ -233,7 +358,14 @@ def _render_contribution_chart(contrib: Dict[str, float]) -> None:
         .mark_bar()
         .encode(
             x=alt.X("구분:N", axis=alt.Axis(labelAngle=0)),
-            y=alt.Y("점수:Q", scale=alt.Scale(domain=[0, 5])),
+            y=alt.Y(
+                "점수:Q",
+                scale=alt.Scale(domain=[0, 5], nice=False),  # nice=False로 항상 0-5 범위 고정
+                axis=alt.Axis(
+                    values=[0, 1, 2, 3, 4, 5],  # y축 눈금을 0, 1, 2, 3, 4, 5로 명시적 설정
+                    title="점수 (만점: 5점)"
+                )
+            ),
             tooltip=["구분", "점수"],
         )
         .properties(height=220)
@@ -298,7 +430,7 @@ def render_insights_page() -> None:
     evaluation = _safe_get_evaluation(detail)
     scores = _safe_get_scores(evaluation)
     contrib = _estimate_contribution(scores)
-    plan = _build_soft_landing_plan(evaluation)
+    plan = _build_soft_landing_plan(evaluation, scores)  # scores 전달하여 기여도 향상 목표 포함
     risks = _extract_risks(evaluation)
 
     # 기본 메타 정보
@@ -326,6 +458,38 @@ def render_insights_page() -> None:
             f"- 단기 기여도: **{contrib['short_term']:.1f} / 5**  \n"
             f"- 장기 성장성: **{contrib['long_term']:.1f} / 5**"
         )
+        
+        # 계산 근거 표시
+        if scores:
+            short_term_keys = ["기술", "백엔드", "프론트엔드", "문제해결", "문제 해결", "성능", "최적화", "품질", "커뮤니케이션", "리더십"]
+            long_term_keys = ["성장", "학습", "잠재력", "적응", "혁신"]
+            
+            short_matched = [name for name in scores.keys() if any(k.lower() in name.lower() for k in short_term_keys)]
+            long_matched = [name for name in scores.keys() if any(k.lower() in name.lower() for k in long_term_keys)]
+            
+            with st.expander("📊 계산 근거", expanded=False):
+                if short_matched:
+                    st.markdown(f"**단기 기여도**: {', '.join(short_matched[:3])}{'...' if len(short_matched) > 3 else ''} 역량의 평균")
+                else:
+                    st.markdown(f"**단기 기여도**: 전체 역량 평균 사용")
+                
+                if long_matched:
+                    st.markdown(f"**장기 성장성**: {', '.join(long_matched)} 역량의 평균")
+                else:
+                    st.markdown(f"**장기 성장성**: 명시적 성장 역량이 없어 전체 역량 평균 및 다양성 고려")
+                    st.caption("→ 역량 종류가 다양하고 점수가 고르면 성장 가능성에 보너스 적용")
+                
+                # 온보딩 반영 여부 표시
+                low_scores = [score for score in scores.values() if score < 3.5]
+                if low_scores:
+                    improvement_potential = min(0.5, len(low_scores) * 0.15)
+                    st.markdown(f"**온보딩 반영**: 낮은 점수 역량 {len(low_scores)}개 개선 여지 → +{improvement_potential:.2f}점 보너스")
+                
+                score_range = max(scores.values()) - min(scores.values()) if scores else 0
+                if score_range > 1.5:
+                    balance_improvement = min(0.3, (score_range - 1.5) * 0.2)
+                    st.markdown(f"**역량 균형 개선**: 점수 차이 {score_range:.1f}점 → 온보딩을 통한 균형 개선 가능성 +{balance_improvement:.2f}점")
+        
         st.caption("※ 점수 기반 간단 추정치입니다. 내부 평가 기준에 맞게 조정 가능.")
 
     with col_c:
@@ -343,7 +507,8 @@ def render_insights_page() -> None:
     # ------------------------
     # 4) 역량 점수 & 기여도 시각화
     # ------------------------
-    left, right = st.columns(2)
+    # 오른쪽 차트를 50% 줄이고, 왼쪽 차트를 그만큼 늘림 (3:1 비율)
+    left, right = st.columns([3, 1])
 
     with left:
         st.markdown("#### 📈 역량별 점수 분포")
@@ -358,7 +523,7 @@ def render_insights_page() -> None:
     # ------------------------
     # 5) Soft-landing 30/60/90 플랜
     # ------------------------
-    st.markdown("### 🧭 Soft-landing 플랜 (30 / 60 / 90일)")
+    st.markdown("### 🧭 온보딩 플랜 (30 / 60 / 90일)")
 
     col30, col60, col90 = st.columns(3)
 

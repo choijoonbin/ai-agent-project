@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any, Dict, List
 import requests
 import streamlit as st
 
@@ -11,6 +12,21 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:9898/api/v1")
 
 def _post(url: str, payload: dict, timeout: int = 30) -> requests.Response:
     return requests.post(url, json=payload, timeout=timeout)
+
+
+def _get(url: str, *, timeout: int = 30) -> requests.Response:
+    return requests.get(url, timeout=timeout)
+
+
+def _fetch_normal_members() -> List[Dict[str, Any]]:
+    """NORMAL 역할의 멤버 목록을 가져옵니다."""
+    try:
+        resp = _get(f"{API_BASE_URL}/auth/members/normal")
+        if resp.status_code != 200:
+            return []
+        return resp.json()
+    except Exception:
+        return []
 
 
 def render_login_page() -> None:
@@ -22,8 +38,9 @@ def render_login_page() -> None:
             st.session_state["login_mode"] = "지원자 로그인"
         # 입력값 초기화
         st.session_state.setdefault("login_user_name", "")
-        st.session_state.setdefault("login_user_birth", "")
+        st.session_state.setdefault("login_user_birth", "1990-01-01")  # 테스트용 기본값
         st.session_state.setdefault("login_admin_name", "")
+        st.session_state.setdefault("login_selected_member_id", None)
     
     # 이미 로그인된 상태에서 로그인 페이지에 접근한 경우 리다이렉트
     if st.session_state.get("member_id") and st.session_state.get("nav_selected_code") == "login":
@@ -85,14 +102,48 @@ def render_login_page() -> None:
                     except Exception as e:
                         st.error(f"로그인 실패: {e}")
         else:
-            name = st.text_input("이름", key="login_user_name")
-            birth = st.text_input("생년월일 (YYYY-MM-DD)", key="login_user_birth", placeholder="1990-01-01")
+            # NORMAL 멤버 목록 가져오기
+            members = _fetch_normal_members()
+            
+            if not members:
+                st.warning("등록된 지원자가 없습니다. 신규가입을 먼저 진행해주세요.")
+                name = st.text_input("이름", key="login_user_name")
+                birth = st.text_input("생년월일 (YYYY-MM-DD)", key="login_user_birth", value="1990-01-01", placeholder="1990-01-01")
+            else:
+                # 멤버 선택 selectbox
+                member_options = {f"{m['name']} ({m['birth']})": m for m in members}
+                
+                # 현재 선택된 멤버의 인덱스 찾기
+                current_index = 0
+                if st.session_state.get("login_selected_member_id"):
+                    for idx, (key, member) in enumerate(member_options.items()):
+                        if member["id"] == st.session_state.get("login_selected_member_id"):
+                            current_index = idx
+                            break
+                
+                selected_key = st.selectbox(
+                    "지원자 선택",
+                    options=list(member_options.keys()),
+                    key="login_selected_member",
+                    index=current_index,
+                )
+                
+                if selected_key:
+                    selected_member = member_options[selected_key]
+                    name = selected_member["name"]
+                    birth = selected_member["birth"]
+                    st.session_state["login_user_name"] = name
+                    st.session_state["login_user_birth"] = birth
+                    st.session_state["login_selected_member_id"] = selected_member["id"]
+                else:
+                    name = ""
+                    birth = "1990-01-01"
 
             col_l, col_r = st.columns(2)
             with col_l:
                 if st.button("로그인", use_container_width=True, key="login_user_btn"):
-                    if not name.strip() or not birth.strip():
-                        st.error("이름과 생년월일을 입력해주세요.")
+                    if not name or not birth:
+                        st.error("지원자를 선택해주세요.")
                     else:
                         try:
                             resp = _post(
