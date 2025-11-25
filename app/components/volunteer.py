@@ -241,7 +241,7 @@ def render_job_detail_page() -> None:
                 st.markdown(f"**유형**: {rec.get('employment_type') or '미정'}")
                 st.markdown(f"**지역**: {rec.get('location') or '미정'}")
 
-                active_apps = [a for a in apps if a["status"] in ("SUBMITTED", "UNDER_REVIEW")] if apps else []
+                active_apps = [a for a in apps if a["status"] in ("SUBMITTED", "DOCUMENT_REVIEW")] if apps else []
                 has_active = bool(active_apps)
                 btn_label = "지원 진행중" if has_active else "지원하기"
 
@@ -381,22 +381,58 @@ def render_jobs_page() -> None:
 
     with cols[1]:
         st.markdown("#### 채용공고 목록")
-        # 상태별 색상 정의
-        status_colors = {
+        # 채용공고 상태별 색상 정의
+        recruitment_status_colors = {
             "OPEN": "#10b981",
             "CLOSED": "#ef4444",
             "ARCHIVED": "#94a3b8",
         }
         
+        # 지원 상태별 색상 및 라벨 정의
+        application_status_colors = {
+            "SUBMITTED": "#0ea5e9",
+            "DOCUMENT_REVIEW": "#6366f1",
+            "PASSED": "#10b981",
+            "REJECTED": "#ef4444",
+            "CANCELLED": "#94a3b8",
+        }
+        application_status_labels = {
+            "SUBMITTED": "지원완료",
+            "DOCUMENT_REVIEW": "서류심사",
+            "PASSED": "합격",
+            "REJECTED": "불합격",
+            "CANCELLED": "지원취소",
+        }
+        
+        # 지원 이력을 recruitment_id로 매핑
+        app_map = {app["recruitment_id"]: app for app in apps} if apps else {}
+        
         for rec in filtered:
             position = rec.get("first_line") or rec.get("title")
             status = rec.get("status", "OPEN")
-            color = status_colors.get(status, "#94a3b8")
+            color = recruitment_status_colors.get(status, "#94a3b8")
+            
+            # 해당 채용공고에 대한 지원 상태 확인
+            rec_id = rec.get("id")
+            app_status = None
+            if rec_id and rec_id in app_map:
+                app_status = app_map[rec_id].get("status")
             
             with st.container(border=True):
                 # 상단: 제목, 상태 배지, 상세보기 버튼
                 col_title, col_button = st.columns([3, 1])
                 with col_title:
+                    # 지원 상태 배지 HTML 생성
+                    application_badge = ""
+                    if app_status:
+                        app_color = application_status_colors.get(app_status, "#94a3b8")
+                        app_label = application_status_labels.get(app_status, app_status)
+                        application_badge = (
+                            f"<span style='display:inline-block;padding:3px 8px;border-radius:999px;"
+                            f"background:{app_color};color:white;font-weight:600;font-size:0.7rem;margin-left:8px;vertical-align:middle;'>"
+                            f"{app_label}</span>"
+                        )
+                    
                     st.markdown(
                         f"<div style='font-size:0.9rem;color:#64748b;font-weight:600;'>채용 포지션</div>"
                         f"<div style='font-size:1.25rem;font-weight:700;margin-top:2px;margin-bottom:4px;'>"
@@ -404,6 +440,7 @@ def render_jobs_page() -> None:
                         f"<span style='display:inline-block;padding:3px 8px;border-radius:999px;"
                         f"background:{color};color:white;font-weight:600;font-size:0.7rem;margin-left:12px;vertical-align:middle;'>"
                         f"{status}</span>"
+                        f"{application_badge}"
                         f"</div>",
                         unsafe_allow_html=True,
                     )
@@ -499,7 +536,7 @@ def render_status_page() -> None:
 
     status_colors = {
         "SUBMITTED": "#0ea5e9",
-        "UNDER_REVIEW": "#6366f1",
+        "DOCUMENT_REVIEW": "#6366f1",
         "PASSED": "#10b981",
         "REJECTED": "#ef4444",
         "CANCELLED": "#94a3b8",
@@ -507,7 +544,7 @@ def render_status_page() -> None:
 
     status_labels = {
         "SUBMITTED": "지원완료",
-        "UNDER_REVIEW": "심사중",
+        "DOCUMENT_REVIEW": "서류심사",
         "PASSED": "합격",
         "REJECTED": "불합격",
         "CANCELLED": "지원취소",
@@ -546,7 +583,7 @@ def render_status_page() -> None:
                 st.caption(f"제출 시각: {submitted_at}")
 
             with c2:
-                if status in ("SUBMITTED", "UNDER_REVIEW"):
+                if status in ("SUBMITTED", "DOCUMENT_REVIEW"):
                     if st.button("지원취소", key=f"cancel_app_{app['id']}", use_container_width=True):
                         try:
                             resp = _patch(

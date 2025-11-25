@@ -38,6 +38,7 @@ class InterviewRequest(BaseModel):
     enable_rag: bool = True
     use_mini: bool = True
     save_history: bool = True  # 실행 시 자동 저장 여부
+    application_id: int | None = None  # 연결된 지원서 ID (선택적)
 
 
 class InterviewResponse(BaseModel):
@@ -116,11 +117,21 @@ def run_interview_workflow(
             jd_text=request.jd_text,
             resume_text=request.resume_text,
             state_json=state_json,
+            application_id=request.application_id,
         )
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
         interview_id = db_obj.id
+        
+        # 에이전트 실행 완료 시 Application 상태를 DOCUMENT_REVIEW로 업데이트
+        if request.application_id:
+            from db.models import Application
+            app_obj = db.query(Application).filter(Application.id == request.application_id).first()
+            if app_obj and app_obj.status == "SUBMITTED":
+                app_obj.status = "DOCUMENT_REVIEW"
+                db.add(app_obj)
+                db.commit()
 
     return InterviewResponse(
         status="success",

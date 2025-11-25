@@ -20,6 +20,7 @@ class Interview(Base):
     - total_questions: 준비된 질문 개수
     - status: 최종 상태 (INIT/ANALYZING/INTERVIEW/DONE 등)
     - state_json: LangGraph 최종 state 전체를 JSON 문자열로 저장
+    - application_id: 연결된 지원서 ID (선택적)
     """
 
     __tablename__ = "interviews"
@@ -29,6 +30,7 @@ class Interview(Base):
     candidate_name = Column(String(255), nullable=False)
     total_questions = Column(Integer, nullable=False, default=5)
     status = Column(String(50), nullable=False, default="DONE")
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=True, index=True)
 
     jd_text = Column(Text, nullable=False)
     resume_text = Column(Text, nullable=False)
@@ -39,6 +41,11 @@ class Interview(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
+    )
+
+    application = relationship(
+        "Application",
+        foreign_keys=[application_id],
     )
 
 

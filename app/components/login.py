@@ -39,7 +39,7 @@ def render_login_page() -> None:
         # 입력값 초기화
         st.session_state.setdefault("login_user_name", "")
         st.session_state.setdefault("login_user_birth", "1990-01-01")  # 테스트용 기본값
-        st.session_state.setdefault("login_admin_name", "")
+        st.session_state.setdefault("login_admin_name", "관리자")  # 테스트용 기본값
         st.session_state.setdefault("login_selected_member_id", None)
     
     # 이미 로그인된 상태에서 로그인 페이지에 접근한 경우 리다이렉트
@@ -51,12 +51,20 @@ def render_login_page() -> None:
             st.session_state["nav_selected_code"] = "jobs"
         st.rerun()
 
+    # 라디오 버튼 모드에 따라 설명 문구 결정
+    mode = st.session_state.get("login_mode", "지원자 로그인")
+    
+    if mode == "지원자 로그인":
+        description = "지원자는 간단한 정보로 로그인/가입 후 채용공고를 확인하고 지원할 수 있습니다."
+    else:
+        description = "관리자는 기존 면접/Insights/채용공고 관리 메뉴를 사용할 수 있습니다."
+    
     st.markdown(
-        """
+        f"""
         <div style="display:flex;gap:32px;align-items:center;flex-wrap:wrap;">
           <div style="flex:1;min-width:280px;">
             <div style="font-size:28px;font-weight:700;line-height:1.2;margin-bottom:16px;">함께 성장할 동료를 찾습니다.</div>
-            <div style="opacity:0.8;">지원자는 간단한 정보로 로그인/가입 후 채용공고를 확인하고 지원할 수 있습니다. 관리자는 기존 면접/Insights 메뉴를 그대로 사용할 수 있습니다.</div>
+            <div style="opacity:0.8;">{description}</div>
           </div>
           <div style="flex:1;min-width:320px;">
         """,
@@ -74,7 +82,7 @@ def render_login_page() -> None:
         )
 
         if mode == "관리자 로그인":
-            name = st.text_input("관리자 이름", key="login_admin_name")
+            name = st.text_input("관리자 이름", key="login_admin_name", value="관리자")
             if st.button("로그인", use_container_width=True, key="login_admin_btn"):
                 if not name.strip():
                     st.error("관리자 이름을 입력해주세요.")

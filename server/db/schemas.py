@@ -15,6 +15,7 @@ class InterviewBase(BaseModel):
     jd_text: str
     resume_text: str
     state_json: str
+    application_id: int | None = None
 
 
 class InterviewCreate(InterviewBase):
@@ -24,6 +25,7 @@ class InterviewCreate(InterviewBase):
 class InterviewSchema(InterviewBase):
     id: int
     created_at: datetime
+    application_status: str | None = None  # 연결된 Application의 status
 
     class Config:
         from_attributes = True  # SQLAlchemy 모델 → Pydantic 변환

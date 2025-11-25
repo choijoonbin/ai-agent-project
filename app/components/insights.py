@@ -312,7 +312,7 @@ def _render_rag_sources(state: Dict[str, Any]) -> None:
 
 
 # ==============================
-# 3) 시각화 유틸
+# 3) 시각화 유틸 (개선)
 # ==============================
 
 def _render_score_chart(scores: Dict[str, float]) -> None:
@@ -324,22 +324,27 @@ def _render_score_chart(scores: Dict[str, float]) -> None:
         [{"역량": k, "점수": float(v)} for k, v in scores.items()]
     )
 
+    # Altair 시각화 개선
     chart = (
         alt.Chart(df)
-        .mark_bar()
+        .mark_bar(color="#4c78a8", cornerRadiusTopLeft=3, cornerRadiusTopRight=3)  # 막대 색상 및 모서리 둥글게
         .encode(
-            x=alt.X("역량:N", axis=alt.Axis(labelAngle=-45, labelLimit=100)),  # 레이블 각도 조정 및 길이 제한 증가
+            x=alt.X(
+                "역량:N", 
+                axis=alt.Axis(labelAngle=-45, title=None, labelLimit=100)  # x축 제목 제거 및 각도 조정
+            ),
             y=alt.Y(
                 "점수:Q",
-                scale=alt.Scale(domain=[0, 5], nice=False),  # nice=False로 항상 0-5 범위 고정
+                scale=alt.Scale(domain=[0, 5], nice=False),  # 0-5 범위로 고정 (5점 만점 명확화)
                 axis=alt.Axis(
-                    values=[0, 1, 2, 3, 4, 5],  # y축 눈금을 0, 1, 2, 3, 4, 5로 명시적 설정
-                    title="점수 (만점: 5점)"
+                    values=[0, 1, 2, 3, 4, 5],  # y축 눈금 명시적 설정
+                    title="점수 (만점: 5점)",
+                    grid=True
                 )
             ),
-            tooltip=["역량", "점수"],
+            tooltip=["역량", alt.Tooltip("점수", format=".1f")],
         )
-        .properties(height=260)
+        .properties(height=350)  # 차트 높이 증가
     )
 
     st.altair_chart(chart, use_container_width=True)
@@ -348,34 +353,36 @@ def _render_score_chart(scores: Dict[str, float]) -> None:
 def _render_contribution_chart(contrib: Dict[str, float]) -> None:
     df = pd.DataFrame(
         [
-            {"구분": "단기 기여도", "점수": contrib.get("short_term", 3.0)},
-            {"구분": "장기 성장성", "점수": contrib.get("long_term", 3.0)},
+            {"구분": "단기 기여도", "점수": contrib.get("short_term", 3.0), "색상": "A"},
+            {"구분": "장기 성장성", "점수": contrib.get("long_term", 3.0), "색상": "B"},
         ]
     )
 
+    # Altair 시각화 개선
     chart = (
         alt.Chart(df)
-        .mark_bar()
+        .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
         .encode(
-            x=alt.X("구분:N", axis=alt.Axis(labelAngle=0)),
+            x=alt.X("구분:N", axis=alt.Axis(labelAngle=0, title=None)),  # x축 제목 제거
             y=alt.Y(
                 "점수:Q",
-                scale=alt.Scale(domain=[0, 5], nice=False),  # nice=False로 항상 0-5 범위 고정
+                scale=alt.Scale(domain=[0, 5], nice=False),  # 0-5 범위로 고정 (5점 만점 명확화)
                 axis=alt.Axis(
-                    values=[0, 1, 2, 3, 4, 5],  # y축 눈금을 0, 1, 2, 3, 4, 5로 명시적 설정
-                    title="점수 (만점: 5점)"
+                    values=[0, 1, 2, 3, 4, 5],  # y축 눈금 명시적 설정
+                    title="점수 (만점: 5점)",
+                    grid=True
                 )
             ),
-            tooltip=["구분", "점수"],
+            color=alt.Color("구분", scale=alt.Scale(domain=["단기 기여도", "장기 성장성"], range=["#e377c2", "#17becf"])),  # 색상 지정
+            tooltip=["구분", alt.Tooltip("점수", format=".1f")],
         )
-        .properties(height=220)
+        .properties(height=280)  # 차트 높이 조정
     )
 
     st.altair_chart(chart, use_container_width=True)
 
-
 # ==============================
-# 4) 메인 렌더 함수
+# 4) 메인 렌더 함수 (개선)
 # ==============================
 
 def render_insights_page() -> None:
@@ -439,65 +446,100 @@ def render_insights_page() -> None:
     recommendation = evaluation.get("recommendation") or "N/A"
     summary = evaluation.get("summary") or ""
 
-    st.markdown("---")
+    st.header("👥 후보 정보 & 요약")
 
     # ------------------------
-    # 3) 상단 요약 카드 영역
+    # 3) 상단 요약 카드 영역 (개선)
     # ------------------------
     col_a, col_b, col_c = st.columns([1.3, 1.3, 1.2])
 
     with col_a:
-        st.markdown("##### 👤 후보 정보")
-        st.markdown(f"**후보자**: {candidate_name or '-'}")
-        st.markdown(f"**포지션**: {job_title or '-'}")
-        st.markdown(f"**추천 결과**: `{recommendation}`")
+        with st.container(border=True):
+            st.subheader("👤 후보 정보", divider='blue')
+            st.markdown(f"**후보자**: **{candidate_name or '-'}**")
+            st.markdown(f"**포지션**: {job_title or '-'}")
+            st.markdown(f"**추천 결과**: `{recommendation}`")
 
     with col_b:
-        st.markdown("##### 🚀 기여도 요약")
-        st.markdown(
-            f"- 단기 기여도: **{contrib['short_term']:.1f} / 5**  \n"
-            f"- 장기 성장성: **{contrib['long_term']:.1f} / 5**"
-        )
-        
-        # 계산 근거 표시
-        if scores:
-            short_term_keys = ["기술", "백엔드", "프론트엔드", "문제해결", "문제 해결", "성능", "최적화", "품질", "커뮤니케이션", "리더십"]
-            long_term_keys = ["성장", "학습", "잠재력", "적응", "혁신"]
+        with st.container(border=True):
+            st.subheader("🚀 기여도 요약", divider='blue')
+            # 역량평균, 단기 기여도, 장기 성장성을 같은 라인에 나란히 표시
+            baseline = sum(scores.values()) / len(scores) if scores else 3.0
             
-            short_matched = [name for name in scores.keys() if any(k.lower() in name.lower() for k in short_term_keys)]
-            long_matched = [name for name in scores.keys() if any(k.lower() in name.lower() for k in long_term_keys)]
+            col_avg, col_short, col_long = st.columns(3)
+            with col_avg:
+                st.metric(
+                    label="역량평균", 
+                    value=f"{baseline:.1f} / 5"
+                )
+            with col_short:
+                delta_short = contrib['short_term'] - baseline
+                delta_text = f"{delta_short:+.1f}점" if delta_short != 0 else "0.0점"
+                st.metric(
+                    label="단기 기여도", 
+                    value=f"{contrib['short_term']:.1f} / 5", 
+                    delta=delta_text,
+                    delta_color="normal" if delta_short >= 0 else "inverse"
+                )
+            with col_long:
+                delta_long = contrib['long_term'] - baseline
+                delta_text = f"{delta_long:+.1f}점" if delta_long != 0 else "0.0점"
+                st.metric(
+                    label="장기 성장성", 
+                    value=f"{contrib['long_term']:.1f} / 5", 
+                    delta=delta_text,
+                    delta_color="normal" if delta_long >= 0 else "inverse"
+                )
             
-            with st.expander("📊 계산 근거", expanded=False):
-                if short_matched:
-                    st.markdown(f"**단기 기여도**: {', '.join(short_matched[:3])}{'...' if len(short_matched) > 3 else ''} 역량의 평균")
-                else:
-                    st.markdown(f"**단기 기여도**: 전체 역량 평균 사용")
+            # 계산 근거는 st.expander 내부로 이동하여 공간 절약
+            if scores:
+                short_term_keys = ["기술", "백엔드", "프론트엔드", "문제해결", "문제 해결", "성능", "최적화", "품질", "커뮤니케이션", "리더십"]
+                long_term_keys = ["성장", "학습", "잠재력", "적응", "혁신"]
                 
-                if long_matched:
-                    st.markdown(f"**장기 성장성**: {', '.join(long_matched)} 역량의 평균")
-                else:
-                    st.markdown(f"**장기 성장성**: 명시적 성장 역량이 없어 전체 역량 평균 및 다양성 고려")
-                    st.caption("→ 역량 종류가 다양하고 점수가 고르면 성장 가능성에 보너스 적용")
-                
-                # 온보딩 반영 여부 표시
-                low_scores = [score for score in scores.values() if score < 3.5]
-                if low_scores:
-                    improvement_potential = min(0.5, len(low_scores) * 0.15)
-                    st.markdown(f"**온보딩 반영**: 낮은 점수 역량 {len(low_scores)}개 개선 여지 → +{improvement_potential:.2f}점 보너스")
-                
-                score_range = max(scores.values()) - min(scores.values()) if scores else 0
-                if score_range > 1.5:
-                    balance_improvement = min(0.3, (score_range - 1.5) * 0.2)
-                    st.markdown(f"**역량 균형 개선**: 점수 차이 {score_range:.1f}점 → 온보딩을 통한 균형 개선 가능성 +{balance_improvement:.2f}점")
-        
-        st.caption("※ 점수 기반 간단 추정치입니다. 내부 평가 기준에 맞게 조정 가능.")
+                with st.expander("📊 계산 근거", expanded=False):
+                    short_matched = [name for name in scores.keys() if any(k.lower() in name.lower() for k in short_term_keys)]
+                    long_matched = [name for name in scores.keys() if any(k.lower() in name.lower() for k in long_term_keys)]
+                    
+                    if short_matched:
+                        st.markdown(f"**단기 기여도**: {', '.join(short_matched[:3])}{'...' if len(short_matched) > 3 else ''} 역량의 평균")
+                    else:
+                        st.markdown(f"**단기 기여도**: 전체 역량 평균 사용")
+                    
+                    if long_matched:
+                        st.markdown(f"**장기 성장성**: {', '.join(long_matched)} 역량의 평균")
+                    else:
+                        st.markdown(f"**장기 성장성**: 명시적 성장 역량이 없어 전체 역량 평균 및 다양성 고려")
+                        st.caption("→ 역량 종류가 다양하고 점수가 고르면 성장 가능성에 보너스 적용")
+                    
+                    # 온보딩 반영 여부 표시
+                    low_scores = [score for score in scores.values() if score < 3.5]
+                    if low_scores:
+                        improvement_potential = min(0.5, len(low_scores) * 0.15)
+                        st.markdown(f"**온보딩 반영**: 낮은 점수 역량 {len(low_scores)}개 개선 여지 → +{improvement_potential:.2f}점 보너스")
+                    
+                    score_range = max(scores.values()) - min(scores.values()) if scores else 0
+                    if score_range > 1.5:
+                        balance_improvement = min(0.3, (score_range - 1.5) * 0.2)
+                        st.markdown(f"**역량 균형 개선**: 점수 차이 {score_range:.1f}점 → 온보딩을 통한 균형 개선 가능성 +{balance_improvement:.2f}점")
+                    
+                    st.caption("※ 점수 기반 간단 추정치이며, 내부 평가 기준에 맞게 조정 가능.")
+
 
     with col_c:
-        st.markdown("##### 📝 한 줄 요약")
-        if summary:
-            st.write(summary)
-        else:
-            st.caption("Judge 평가 요약이 없어 간단 요약을 표시할 수 없습니다.")
+        with st.container(border=True):
+            st.subheader("📝 한 줄 요약", divider='blue')
+            if summary:
+                # 긴 텍스트는 최대 높이 제한 및 스크롤 적용
+                st.markdown(
+                    f"""
+                    <div style="max-height: 175px; overflow-y: auto; padding: 8px;">
+                        {summary}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            else:
+                st.caption("Judge 평가 요약이 없어 간단 요약을 표시할 수 없습니다.")
 
     with st.expander("🔎 직군 & RAG 참고 정보", expanded=False):
         _render_rag_sources(state)
@@ -505,61 +547,82 @@ def render_insights_page() -> None:
     st.markdown("---")
 
     # ------------------------
-    # 4) 역량 점수 & 기여도 시각화
+    # 4) 역량 점수 & 기여도 시각화 (개선된 함수 호출)
     # ------------------------
-    # 오른쪽 차트를 50% 줄이고, 왼쪽 차트를 그만큼 늘림 (3:1 비율)
-    left, right = st.columns([3, 1])
+    # 좌측 차트 20% 축소, 우측 차트 20% 확대 (2.4:1.2 = 2:1 비율)
+    # 간격을 넓히기 위해 중간에 빈 컬럼 추가
+    left, gap, right = st.columns([2, 0.3, 1])
 
     with left:
-        st.markdown("#### 📈 역량별 점수 분포")
+        st.subheader("📈 역량별 점수 분포")
         _render_score_chart(scores)
 
+    with gap:
+        # 간격을 위한 빈 공간
+        st.empty()
+
     with right:
-        st.markdown("#### 🎯 기여도 & 성장성")
+        st.subheader("🎯 기여도 & 성장성")
         _render_contribution_chart(contrib)
 
     st.markdown("---")
 
     # ------------------------
-    # 5) Soft-landing 30/60/90 플랜
+    # 5) Soft-landing 30/60/90 플랜 (카드 형식으로 개선)
     # ------------------------
-    st.markdown("### 🧭 온보딩 플랜 (30 / 60 / 90일)")
+    st.header("🧭 온보딩 플랜 (30 / 60 / 90일)")
+
+    def render_plan_card(title: str, lines: List[str], icon: str) -> None:
+        """온보딩 플랜을 시각적 카드 형태로 렌더링 - 높이 300px 고정"""
+        
+        st.markdown(f"#### {icon} {title}")
+        
+        # 내부 컨테이너를 사용하여 구분 - 높이 300px 고정
+        # 폰트 사이즈를 후보 정보 & 요약 영역과 통일 (16px 기준)
+        content_html = ""
+        for line in lines:
+            if line.startswith("**기여도 향상 목표"):
+                content_html += f"<div style='margin-bottom: 8px; font-size: 16px;'><strong>{line}</strong></div>"
+            elif line.startswith("- "):  # 리스트 항목
+                content_html += f"<p style='margin: 0; padding-left: 10px; font-size: 16px; margin-bottom: 6px; line-height: 1.5;'>• {line[2:]}</p>"
+            else:  # 일반 텍스트
+                content_html += f"<p style='margin: 0; margin-bottom: 6px; font-size: 16px; color: #666; line-height: 1.5;'>{line}</p>"
+        
+        # 카드 전체를 300px 고정 높이로 설정
+        st.markdown(
+            f"""
+            <div style="border: 1px solid rgba(250, 250, 250, 0.2); border-radius: 0.5rem; padding: 0; height: 300px; display: flex; flex-direction: column;">
+                <div style="height: 300px; overflow-y: auto; padding: 16px; flex: 1;">
+                    {content_html}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        st.markdown("")  # 컨테이너 간 간격 확보
 
     col30, col60, col90 = st.columns(3)
 
     with col30:
-        st.markdown("#### 🗓 첫 30일")
-        for line in plan["30"]:
-            if line.startswith("- "):
-                st.markdown(line)
-            else:
-                st.write(line)
+        render_plan_card("첫 30일 (적응 & 학습)", plan["30"], "🚀")
 
     with col60:
-        st.markdown("#### 🗓 60일차까지")
-        for line in plan["60"]:
-            if line.startswith("- "):
-                st.markdown(line)
-            else:
-                st.write(line)
+        render_plan_card("60일차까지 (실무 & 기여)", plan["60"], "⚙️")
 
     with col90:
-        st.markdown("#### 🗓 90일 이후")
-        for line in plan["90"]:
-            if line.startswith("- "):
-                st.markdown(line)
-            else:
-                st.write(line)
+        render_plan_card("90일 이후 (성장 & 정의)", plan["90"], "🗺️")
 
     st.markdown("---")
 
     # ------------------------
-    # 6) 리스크 & 케어 포인트
+    # 6) 리스크 & 케어 포인트 (개선)
     # ------------------------
-    st.markdown("### ⚠️ 리스크 & 케어 포인트")
+    st.header("⚠️ 리스크 & 케어 포인트")
 
-    for r in risks:
-        st.markdown(f"- {r}")
+    # st.expander를 활용하여 시각적 강조
+    with st.expander("🚨 리스크 목록 확인", expanded=True):
+        for r in risks:
+            st.markdown(f"- **{r}**") # 리스크 항목을 더 강조
 
     st.caption(
         "※ 위 인사이트는 Judge 평가 요약/강점/약점을 바탕으로 한 규칙 기반 제안입니다. "

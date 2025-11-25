@@ -104,14 +104,14 @@ def _render_stepper(current: int) -> None:
 def _status_badge(status: str) -> str:
     labels = {
         "SUBMITTED": "지원완료",
-        "UNDER_REVIEW": "심사중",
+        "DOCUMENT_REVIEW": "서류심사",
         "PASSED": "합격",
         "REJECTED": "불합격",
         "CANCELLED": "지원취소",
     }
     colors = {
         "SUBMITTED": "#0ea5e9",
-        "UNDER_REVIEW": "#6366f1",
+        "DOCUMENT_REVIEW": "#6366f1",
         "PASSED": "#10b981",
         "REJECTED": "#ef4444",
         "CANCELLED": "#94a3b8",
@@ -216,19 +216,6 @@ def render_studio_page() -> None:
                                 if not resume_path or not Path(resume_path).exists():
                                     st.error("이력서 파일이 존재하지 않습니다.")
                                 else:
-                                    # 상태를 심사중으로 전환
-                                    try:
-                                        resp = _patch(
-                                            f"{API_BASE_URL}/applications/{app['id']}/status",
-                                            {"status": "UNDER_REVIEW"},
-                                        )
-                                        if resp.status_code != 200:
-                                            st.warning("지원 상태 업데이트에 실패했습니다.")
-                                        else:
-                                            app["status"] = "UNDER_REVIEW"
-                                    except Exception as patch_error:
-                                        st.warning(f"지원 상태 업데이트 중 오류가 발생했습니다: {patch_error}")
-
                                     with st.spinner("면접 에이전트 실행 중..."):
                                         try:
                                             resume_text = load_document_text(Path(resume_path))
@@ -242,6 +229,7 @@ def render_studio_page() -> None:
                                                 "enable_rag": st.session_state.get("cfg_enable_rag", True),
                                                 "use_mini": st.session_state.get("cfg_use_mini", True),
                                                 "save_history": True,
+                                                "application_id": app["id"],  # Application ID 전달
                                             }
                                             resp = _post(f"{API_BASE_URL}/workflow/interview/run", payload, timeout=300)
                                             if resp.status_code != 200:

@@ -2,6 +2,7 @@
 
 import os
 import json
+import html
 from typing import Any, Dict, List
 
 import requests
@@ -260,8 +261,8 @@ def _render_file_library(file_type: str) -> None:
 # ==========================
 
 def render_evaluation(state: Dict[str, Any]) -> None:
-    st.subheader("📊 최종 평가 결과")
-
+    """최종 평가 결과를 인사이트 스타일로 개선된 UI로 렌더링"""
+    
     evaluation = state.get("evaluation")
     if not evaluation:
         st.info("평가 결과가 없습니다.")
@@ -274,51 +275,185 @@ def render_evaluation(state: Dict[str, Any]) -> None:
     scores = evaluation.get("scores", {})
     raw_text = evaluation.get("raw_text")
 
-    # --- 상단 추천/요약 + 차트 2단 레이아웃 --- #
-    left, right = st.columns([2, 3])
+    # ------------------------
+    # 1) 상단 추천 결과 카드
+    # ------------------------
+    if recommendation:
+        with st.container(border=True):
+            st.subheader("🏁 최종 추천", divider='blue')
+            # 추천 결과에 따른 색상 구분 (순서 중요: "No Hire"를 먼저 체크)
+            recommendation_upper = recommendation.upper()
+            if "NO HIRE" in recommendation_upper:
+                rec_color = "#ef4444"  # 빨간색
+            elif "STRONG HIRE" in recommendation_upper or "HIRE" in recommendation_upper:
+                rec_color = "#10b981"  # 초록색
+            else:
+                rec_color = "#6366f1"  # 보라색
+            
+            st.markdown(
+                f"""
+                <div style="padding: 16px; background: {rec_color}20; border-radius: 8px; border-left: 4px solid {rec_color}; margin-top: 16px; margin-bottom: 8px;">
+                    <p style="margin: 0; font-size: 16px; font-weight: 600; color: {rec_color}; line-height: 1.6;">
+                        {recommendation}
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-    with left:
-        if recommendation:
-            st.markdown(f"### 🏁 최종 추천: **{recommendation}**")
+    st.markdown("---")
 
+    # ------------------------
+    # 2) 요약, 강점, 약점 카드 (3개 나란히, 높이 300px 고정)
+    # ------------------------
+    col_summary, col_strength, col_weakness = st.columns(3)
+
+    with col_summary:
         if summary:
-            st.markdown("#### 요약")
-            st.write(summary)
+            st.markdown("#### 📝 평가 요약")
+            # HTML 이스케이프 처리
+            summary_escaped = html.escape(summary)
+            st.markdown(
+                f"""
+                <div style="border: 1px solid rgba(250, 250, 250, 0.2); border-radius: 0.5rem; padding: 0; height: 300px; display: flex; flex-direction: column;">
+                    <div style="height: 300px; overflow-y: auto; padding: 16px; flex: 1; font-size: 16px; line-height: 1.6;">
+                        {summary_escaped}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown("#### 📝 평가 요약")
+            st.markdown(
+                """
+                <div style="border: 1px solid rgba(250, 250, 250, 0.2); border-radius: 0.5rem; padding: 0; height: 300px; display: flex; flex-direction: column;">
+                    <div style="height: 300px; overflow-y: auto; padding: 16px; flex: 1; display: flex; align-items: center; justify-content: center; color: #666;">
+                        평가 요약이 없습니다.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
+    with col_strength:
         if strengths:
             st.markdown("#### ✅ 강점")
+            # HTML 이스케이프 처리 및 내용 생성
+            content_html = ""
             for s in strengths:
-                st.markdown(f"- {s}")
+                s_escaped = html.escape(s)
+                content_html += f'<div style="padding: 8px 0; font-size: 16px; border-left: 3px solid #10b981; padding-left: 12px; margin-bottom: 8px;">• {s_escaped}</div>'
+            
+            st.markdown(
+                f"""
+                <div style="border: 1px solid rgba(250, 250, 250, 0.2); border-radius: 0.5rem; padding: 0; height: 300px; display: flex; flex-direction: column;">
+                    <div style="height: 300px; overflow-y: auto; padding: 16px; flex: 1;">
+                        {content_html}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown("#### ✅ 강점")
+            st.markdown(
+                """
+                <div style="border: 1px solid rgba(250, 250, 250, 0.2); border-radius: 0.5rem; padding: 0; height: 300px; display: flex; flex-direction: column;">
+                    <div style="height: 300px; overflow-y: auto; padding: 16px; flex: 1; display: flex; align-items: center; justify-content: center; color: #666;">
+                        강점이 없습니다.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
+    with col_weakness:
         if weaknesses:
             st.markdown("#### ❌ 약점")
+            # HTML 이스케이프 처리 및 내용 생성
+            content_html = ""
             for w in weaknesses:
-                st.markdown(f"- {w}")
+                w_escaped = html.escape(w)
+                content_html += f'<div style="padding: 8px 0; font-size: 16px; border-left: 3px solid #ef4444; padding-left: 12px; margin-bottom: 8px;">• {w_escaped}</div>'
+            
+            st.markdown(
+                f"""
+                <div style="border: 1px solid rgba(250, 250, 250, 0.2); border-radius: 0.5rem; padding: 0; height: 300px; display: flex; flex-direction: column;">
+                    <div style="height: 300px; overflow-y: auto; padding: 16px; flex: 1;">
+                        {content_html}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown("#### ❌ 약점")
+            st.markdown(
+                """
+                <div style="border: 1px solid rgba(250, 250, 250, 0.2); border-radius: 0.5rem; padding: 0; height: 300px; display: flex; flex-direction: column;">
+                    <div style="height: 300px; overflow-y: auto; padding: 16px; flex: 1; display: flex; align-items: center; justify-content: center; color: #666;">
+                        약점이 없습니다.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-    with right:
-        if scores:
-            st.markdown("#### 📈 역량별 점수(시각화)")
+    st.markdown("---")
 
-            # Altair 차트: x축/라벨을 가로로 보이도록 labelAngle=0 설정
+    # ------------------------
+    # 3) 역량별 점수 분포 차트 (하단에 위치)
+    # ------------------------
+    if scores:
+        # 평균 점수 계산
+        avg_score = sum(scores.values()) / len(scores) if scores else 0.0
+        
+        with st.container(border=True):
+            st.subheader(f"📈 역량별 점수 분포 (평균: {avg_score:.1f}점)", divider='blue')
+            
+            # Altair 차트 개선 (인사이트 스타일)
             df = pd.DataFrame(
                 [{"역량": k, "점수": float(v)} for k, v in scores.items()]
             )
 
             chart = (
                 alt.Chart(df)
-                .mark_bar()
+                .mark_bar(color="#4c78a8", cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
                 .encode(
-                    x=alt.X("역량:N", axis=alt.Axis(labelAngle=0)),
-                    y=alt.Y("점수:Q", scale=alt.Scale(domain=[0, 5])),
-                    tooltip=["역량", "점수"],
+                    x=alt.X(
+                        "역량:N", 
+                        axis=alt.Axis(labelAngle=-45, title=None, labelLimit=100)
+                    ),
+                    y=alt.Y(
+                        "점수:Q",
+                        scale=alt.Scale(domain=[0, 5], nice=False),
+                        axis=alt.Axis(
+                            values=[0, 1, 2, 3, 4, 5],
+                            title="점수 (만점: 5점)",
+                            grid=True
+                        )
+                    ),
+                    tooltip=["역량", alt.Tooltip("점수", format=".1f")],
                 )
-                .properties(height=260)
+                .properties(height=350)
             )
 
             st.altair_chart(chart, use_container_width=True)
 
-    with st.expander("LLM 원문 평가 텍스트 보기"):
-        st.write(raw_text)
+    # ------------------------
+    # 3) 원문 평가 텍스트 (Expander)
+    # ------------------------
+    if raw_text:
+        with st.expander("📄 LLM 원문 평가 텍스트 보기", expanded=False):
+            st.markdown(
+                f"""
+                <div style="padding: 12px; background: rgba(250, 250, 250, 0.05); border-radius: 8px; font-size: 14px; line-height: 1.6;">
+                    {raw_text}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
 
 # ===================================

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from db.database import get_db
-from db import models
+from db import models, schemas
 
 router = APIRouter(
     prefix="/api/v1/auth",
@@ -46,13 +47,13 @@ def _ensure_admin_seed(db: Session) -> models.Member:
     """요구사항에 따라 관리자 계정을 보장."""
     admin = (
         db.query(models.Member)
-        .filter(models.Member.name == "최준빈", models.Member.role == "ADMIN")
+        .filter(models.Member.name == "관리자", models.Member.role == "ADMIN")
         .first()
     )
     if admin:
         return admin
     admin = models.Member(
-        name="최준빈",
+        name="관리자",
         birth="1900-01-01",
         role="ADMIN",
     )
@@ -128,3 +129,24 @@ def signup(request: SignupRequest, db: Session = Depends(get_db)) -> SignupRespo
         birth=member.birth,
         role=member.role,
     )
+
+
+@router.get("/members/normal", response_model=List[schemas.MemberSchema])
+def list_normal_members(db: Session = Depends(get_db)) -> List[schemas.MemberSchema]:
+    """NORMAL 역할의 멤버 목록을 반환합니다."""
+    members = (
+        db.query(models.Member)
+        .filter(models.Member.role == "NORMAL")
+        .order_by(models.Member.name)
+        .all()
+    )
+    return [
+        schemas.MemberSchema(
+            id=m.id,
+            name=m.name,
+            birth=m.birth,
+            role=m.role,
+            created_at=m.created_at,
+        )
+        for m in members
+    ]

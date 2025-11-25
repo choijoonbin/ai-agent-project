@@ -21,17 +21,65 @@ router = APIRouter(
 def list_interviews(
     skip: int = 0,
     limit: int = 50,
+    status: str | None = None,  # Application status 필터
     db: Session = Depends(get_db),
 ):
     """면접 이력 목록 조회 (최신순)."""
+    from db.models import Application
+    
+    query = db.query(InterviewModel)
+    
+    # Application status 필터 적용
+    if status:
+        query = query.join(Application, InterviewModel.application_id == Application.id).filter(
+            Application.status == status
+        )
+    
     interviews = (
-        db.query(InterviewModel)
+        query
         .order_by(InterviewModel.created_at.desc())
         .offset(skip)
         .limit(limit)
         .all()
     )
-    return interviews
+    
+    # Application status 정보 추가
+    result = []
+    for interview in interviews:
+        interview_dict = InterviewSchema.model_validate(interview).model_dump()
+        
+        # application_id가 있으면 직접 조회
+        if interview.application_id:
+            app = db.query(Application).filter(Application.id == interview.application_id).first()
+            if app:
+                interview_dict["application_status"] = app.status
+        else:
+            # application_id가 없으면 candidate_name으로 매칭 시도
+            # 같은 이름의 지원자 중 가장 최근 Application 찾기
+            from db.models import Member
+            member = db.query(Member).filter(Member.name == interview.candidate_name).first()
+            if member:
+                # 해당 멤버의 가장 최근 Application 찾기
+                app = (
+                    db.query(Application)
+                    .filter(Application.member_id == member.id)
+                    .order_by(Application.updated_at.desc())
+                    .first()
+                )
+                if app:
+                    interview_dict["application_status"] = app.status
+                    # application_id도 업데이트 (선택적)
+                    interview.application_id = app.id
+        
+        result.append(InterviewSchema(**interview_dict))
+    
+    # application_id 업데이트가 있었다면 커밋
+    try:
+        db.commit()
+    except:
+        db.rollback()
+    
+    return result
 
 
 @router.get("/{interview_id}", response_model=InterviewSchema)

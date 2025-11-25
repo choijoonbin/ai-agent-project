@@ -16,9 +16,11 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:9898/api/v1")
 
 # ---------- 공통 API ---------- #
 
-def fetch_interview_list(limit: int = 20) -> List[Dict[str, Any]]:
+def fetch_interview_list(limit: int = 20, status: str | None = None) -> List[Dict[str, Any]]:
     """면접 이력 목록 조회"""
     url = f"{API_BASE_URL}/interviews/?limit={limit}"
+    if status:
+        url += f"&status={status}"
     resp = requests.get(url, timeout=30)
     if resp.status_code != 200:
         st.error(f"면접 이력 조회 실패: {resp.status_code}")
@@ -103,28 +105,27 @@ def render_history_tab() -> None:
         st.session_state["history_filter_job"] = "전체"
     if "history_filter_rec" not in st.session_state:
         st.session_state["history_filter_rec"] = "전체"
+    if "history_filter_status" not in st.session_state:
+        st.session_state["history_filter_status"] = "전체"
     if "history_sort" not in st.session_state:
         st.session_state["history_sort"] = "최신순"
 
     # ------------------------
-    # 1) 목록 조회
+    # 1) 전체 목록 조회 (필터 UI 표시를 위해)
     # ------------------------
-    interviews = fetch_interview_list(limit=50)
-    if not interviews:
-        st.info("저장된 면접 이력이 없습니다.")
-        return
-
-    # 직군/포지션 목록
+    all_interviews = fetch_interview_list(limit=50, status=None)  # 전체 조회
+    
+    # 직군/포지션 목록 (전체 목록 기준)
     job_titles = sorted(
-        {item.get("job_title", "") for item in interviews if item.get("job_title")}
+        {item.get("job_title", "") for item in all_interviews if item.get("job_title")}
     )
     job_options = ["전체"] + job_titles
 
     # ------------------------
-    # 2) 필터/정렬 UI
+    # 2) 필터/정렬 UI (항상 표시)
     # ------------------------
     with st.container():
-        col1, col2, col3 = st.columns([1.4, 1.0, 1.0])
+        col1, col2, col3, col4, col5 = st.columns([1.2, 1.0, 1.0, 0.8, 0.5])
 
         with col1:
             st.selectbox(
@@ -142,13 +143,39 @@ def render_history_tab() -> None:
 
         with col3:
             st.selectbox(
+                "지원 상태",
+                options=["전체", "SUBMITTED", "DOCUMENT_REVIEW", "PASSED", "REJECTED", "CANCELLED"],
+                key="history_filter_status",
+            )
+
+        with col4:
+            st.selectbox(
                 "정렬",
                 options=["최신순", "오래된순"],
                 key="history_sort",
             )
+        
+        with col5:
+            if st.button("🔄 초기화", use_container_width=True, help="모든 필터를 초기화합니다"):
+                st.session_state["history_filter_job"] = "전체"
+                st.session_state["history_filter_rec"] = "전체"
+                st.session_state["history_filter_status"] = "전체"
+                st.session_state["history_sort"] = "최신순"
+                st.rerun()
 
     # ------------------------
-    # 3) 필터 적용
+    # 3) 필터 적용된 목록 조회
+    # ------------------------
+    status_filter = st.session_state.get("history_filter_status")
+    status_param = None if status_filter == "전체" else status_filter
+    interviews = fetch_interview_list(limit=50, status=status_param)
+    
+    if not all_interviews:
+        st.info("저장된 면접 이력이 없습니다.")
+        return
+
+    # ------------------------
+    # 4) 필터 적용
     # ------------------------
     filtered = list(interviews)
 
@@ -186,7 +213,7 @@ def render_history_tab() -> None:
     filtered.sort(key=_key_created, reverse=reverse)
 
     # ------------------------
-    # 4) 새로고침 버튼 / 안내
+    # 5) 새로고침 버튼 / 안내
     # ------------------------
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -200,13 +227,44 @@ def render_history_tab() -> None:
         st.caption("※ 최대 50건 이력을 조회합니다.")
 
     if not filtered:
-        st.info("필터 조건에 해당하는 면접 이력이 없습니다.")
+        st.warning(f"📋 필터 조건에 해당하는 면접 이력이 없습니다. (전체: {len(all_interviews)}건)")
+        st.info("💡 다른 필터 조건을 선택하거나 '초기화' 버튼을 눌러 필터를 초기화해보세요.")
         return
 
     selected_id = st.session_state.get("history_selected_id")
 
+    # 상태 배지 스타일 정의
+    def _get_status_badge(status: str | None) -> str:
+        """Application status에 따른 배지 HTML 반환"""
+        if not status:
+            return ""
+        
+        status_labels = {
+            "SUBMITTED": "지원완료",
+            "DOCUMENT_REVIEW": "서류심사",
+            "PASSED": "합격",
+            "REJECTED": "불합격",
+            "CANCELLED": "지원취소",
+        }
+        status_colors = {
+            "SUBMITTED": "#0ea5e9",
+            "DOCUMENT_REVIEW": "#6366f1",
+            "PASSED": "#10b981",
+            "REJECTED": "#ef4444",
+            "CANCELLED": "#94a3b8",
+        }
+        
+        label = status_labels.get(status, status)
+        color = status_colors.get(status, "#94a3b8")
+        
+        return (
+            f"<span style='display:inline-block;padding:3px 8px;border-radius:999px;"
+            f"background:{color};color:white;font-weight:600;font-size:0.7rem;margin-left:8px;vertical-align:middle;'>"
+            f"{label}</span>"
+        )
+
     # ------------------------
-    # 5) 카드 렌더링
+    # 6) 카드 렌더링
     # ------------------------
     for item in filtered:
         interview_id = item["id"]
@@ -215,13 +273,18 @@ def render_history_tab() -> None:
         created_at = format_to_kst(item.get("created_at"))
         total_questions = item["total_questions"]
         status = item["status"]
+        application_status = item.get("application_status")
 
         cache_key_state = f"history_state_{interview_id}"
 
         with st.container(border=True):
             top_cols = st.columns([5, 1])
             with top_cols[0]:
-                st.markdown(f"#### {title} - {name}")
+                status_badge = _get_status_badge(application_status)
+                st.markdown(
+                    f"#### {title} - {name}{status_badge}",
+                    unsafe_allow_html=True
+                )
                 st.caption(
                     f"🗓 {created_at} | 질문 수(초기): {total_questions} | 상태: {status}"
                 )
