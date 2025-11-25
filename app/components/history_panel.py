@@ -262,6 +262,34 @@ def render_history_tab() -> None:
             f"background:{color};color:white;font-weight:600;font-size:0.7rem;margin-left:8px;vertical-align:middle;'>"
             f"{label}</span>"
         )
+    
+    def _get_recommendation_badge(interview_id: int) -> str:
+        """면접 평가 결과(Hire/No Hire)에 따른 배지 HTML 반환"""
+        rec = _get_recommendation_cached(interview_id)
+        
+        if not rec or rec == "기타":
+            return ""
+        
+        # Hire/No Hire 판단
+        rec_upper = rec.upper()
+        if "NO HIRE" in rec_upper or "NO-HIRE" in rec_upper:
+            label = "No Hire"
+            color = "#ef4444"  # 빨간색
+        elif "HIRE" in rec_upper:
+            if "STRONG" in rec_upper:
+                label = "Strong Hire"
+                color = "#10b981"  # 초록색
+            else:
+                label = "Hire"
+                color = "#10b981"  # 초록색
+        else:
+            return ""
+        
+        return (
+            f"<span style='display:inline-block;padding:3px 8px;border-radius:999px;"
+            f"background:{color};color:white;font-weight:600;font-size:0.7rem;margin-left:8px;vertical-align:middle;'>"
+            f"{label}</span>"
+        )
 
     # ------------------------
     # 6) 카드 렌더링
@@ -281,15 +309,16 @@ def render_history_tab() -> None:
             top_cols = st.columns([5, 1])
             with top_cols[0]:
                 status_badge = _get_status_badge(application_status)
+                recommendation_badge = _get_recommendation_badge(interview_id)
                 st.markdown(
-                    f"#### {title} - {name}{status_badge}",
+                    f"#### {title} - {name}{status_badge}{recommendation_badge}",
                     unsafe_allow_html=True
                 )
                 st.caption(
                     f"🗓 {created_at} | 질문 수(초기): {total_questions} | 상태: {status}"
                 )
 
-            # ----- 이력 상세 열기 / 닫기 버튼 (카드 우측 상단) ----- #
+            # ----- 이력 상세 열기 / 닫기 버튼 및 인터뷰 진행 버튼 (카드 우측 상단) ----- #
             with top_cols[1]:
                 st.write("")  # align button to top
                 is_open = selected_id == interview_id
@@ -312,6 +341,16 @@ def render_history_tab() -> None:
                                 del st.session_state[prev_cache_key]
                         st.session_state["history_selected_id"] = interview_id
                     st.rerun()
+                
+                # 인터뷰 진행 버튼
+                if st.button(
+                    "💬 인터뷰 진행",
+                    key=f"interview_{interview_id}",
+                    use_container_width=True,
+                ):
+                    # 추후 기능 구현 예정
+                    st.info("인터뷰 진행 기능은 추후 구현 예정입니다.")
+                    # TODO: 인터뷰 진행 기능 구현
 
             # --- 선택된 카드라면, 바로 아래에 상세 패널 렌더 --- #
             if selected_id == interview_id:
