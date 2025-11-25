@@ -41,10 +41,14 @@ class ResumeAnalyzerAgent(BaseAgent):
         jd_summary = state["jd_summary"]
         jd_requirements = state["jd_requirements"]
         candidate_name = state["candidate_name"]
+        job_title = state.get("job_title", "")
+        job_role = state.get("job_role", "general")
 
+        # 직군별 평가 기준을 포함한 RAG 컨텍스트 구축
+        # 다른 직군 경험과의 차이점을 포함하여 정확한 분석을 위해 키워드 추가
         rag_context = self._build_rag_context(
             state,
-            query=f"{candidate_name} 이력서 평가 기준 및 인터뷰 팁",
+            query=f"{job_title} {job_role} 이력서 평가 기준 역량 분석 다른 직군 경험과의 차이점",
         )
 
         system_prompt = self.system_prompt
@@ -60,8 +64,13 @@ class ResumeAnalyzerAgent(BaseAgent):
 [JD 요구 역량/기술/경험]
 {chr(10).join(['- ' + r for r in jd_requirements])}
 
-[추가 참고 정보 (선택)]
+[추가 참고 정보 (직군별 평가 기준)]
 {rag_context}
+
+**중요 분석 원칙:**
+- 지원자의 현재 직군 경험과 목표 직군({job_title})의 요구사항을 구분하여 분석하세요.
+- 이력서 요약 시 지원자의 실제 직군 배경을 명확히 명시하세요 (예: "Backend 개발자", "Frontend 개발자", "PM" 등).
+- JD 요구사항과의 적합도 평가 시, 지원자의 경험이 목표 직군 역량과 직접적으로 매칭되는지 신중히 판단하세요.
 
 위 정보를 기반으로 다음을 작성해주세요:
 

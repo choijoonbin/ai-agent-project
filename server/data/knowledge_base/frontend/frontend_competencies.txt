@@ -1,5 +1,4 @@
 Frontend Developer Competencies
-
 1. HTML/CSS/JavaScript 기반 웹 기본기
 2. React/Vue/Svelte 등 프레임워크 숙련도
 3. 상태관리 Redux, Vuex, Pinia

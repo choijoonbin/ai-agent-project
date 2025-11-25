@@ -16,6 +16,19 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 KNOWLEDGE_BASE_DIR = BASE_DIR / "data" / "knowledge_base"
 
 
+def get_available_roles() -> List[str]:
+    """
+    knowledge_base 하위 폴더명을 직군(role) 리스트로 반환.
+    """
+    if not KNOWLEDGE_BASE_DIR.exists():
+        return []
+    roles: List[str] = []
+    for path in KNOWLEDGE_BASE_DIR.iterdir():
+        if path.is_dir():
+            roles.append(path.name)
+    return sorted(roles)
+
+
 def load_raw_documents() -> List[Document]:
     """
     knowledge_base 디렉터리에서 원본 문서를 읽어옵니다.
@@ -39,6 +52,20 @@ def load_raw_documents() -> List[Document]:
             use_multithreading=True,
         )
         docs.extend(loader.load())
+
+    # role 메타데이터 부여
+    for doc in docs:
+        source = doc.metadata.get("source", "")
+        role = "general"
+        if source:
+            try:
+                rel_path = Path(source).resolve().relative_to(KNOWLEDGE_BASE_DIR.resolve())
+                if rel_path.parts:
+                    role = rel_path.parts[0]
+            except ValueError:
+                # knowledge_base 외부인 경우 기본 general 유지
+                pass
+        doc.metadata["role"] = role
 
     return docs
 

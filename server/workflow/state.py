@@ -87,6 +87,8 @@ class EvaluationResult(TypedDict, total=False):
     - weaknesses: 약점 리스트
     - recommendation: 최종 추천 (예: "Strong Hire", "Hire", "No Hire")
     - scores: 역량별 점수 {"커뮤니케이션": 4.5, "문제해결": 4.0, ...}
+    - detailed_scores: 직군별 세분화된 역량 점수 (예: {"프로젝트 계획 및 일정 관리": 22.5/30, ...})
+    - career_transition: 전환 가능성 분석 및 제안
     - raw_text: LLM이 생성한 원문 평가 텍스트
     """
     summary: str
@@ -94,6 +96,8 @@ class EvaluationResult(TypedDict, total=False):
     weaknesses: List[str]
     recommendation: str
     scores: Dict[str, float]
+    detailed_scores: Dict[str, Dict[str, float]]  # {"역량명": {"점수": 22.5, "배점": 30, "비율": 0.75}}
+    career_transition: Dict[str, Any]  # {"가능성": "높음/보통/낮음", "점수": 3.5, "제안": ["...", ...]}
     raw_text: str
 
 
@@ -108,6 +112,7 @@ class InterviewState(TypedDict):
     candidate_name: str                # 지원자 이름 (예: "홍길동")
     jd_text: str                       # JD 원문 텍스트
     resume_text: str                   # 이력서 원문 텍스트
+    job_role: str                      # 직군/직무 태그 (예: "pm", "frontend", "general")
 
     # ===== 분석 결과 =====
     jd_summary: str                    # JD 분석/요약 결과
@@ -126,6 +131,7 @@ class InterviewState(TypedDict):
     # 각 에이전트가 RAG를 사용해 가져온 컨텍스트/문서들을 저장
     rag_contexts: Dict[str, str]       # {AgentType.*: 컨텍스트 텍스트}
     rag_docs: Dict[str, List[Any]]     # {AgentType.*: [원본 Document/page_content 리스트 등]}
+    web_search_info: Dict[str, Any]    # {AgentType.*: {"used": bool, "query": str, "results_count": int, "results": List[Dict], "processing": str}}
 
     # ===== 최종 평가 결과 =====
     evaluation: Optional[EvaluationResult]
@@ -137,6 +143,7 @@ def create_initial_state(
     jd_text: str,
     resume_text: str,
     total_questions: int = 5,
+    job_role: str = "general",
 ) -> InterviewState:
     """
     그래프 시작 시 사용할 초기 상태를 생성합니다.
@@ -148,6 +155,7 @@ def create_initial_state(
         candidate_name=candidate_name,
         jd_text=jd_text,
         resume_text=resume_text,
+        job_role=job_role,
         jd_summary="",
         jd_requirements=[],
         candidate_summary="",
@@ -159,5 +167,6 @@ def create_initial_state(
         prev_agent="",
         rag_contexts={},
         rag_docs={},
+        web_search_info={},
         evaluation=None,
     )

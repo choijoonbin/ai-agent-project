@@ -36,10 +36,10 @@ class JDAnalyzerAgent(BaseAgent):
         jd_text = state["jd_text"]
         job_title = state["job_title"]
 
-        # RAG 컨텍스트 구축 (선택)
+        # RAG 컨텍스트 구축: 역량 차이점을 고려한 JD 분석을 위해 키워드 추가
         rag_context = self._build_rag_context(
             state,
-            query=f"{job_title} 채용 공고 핵심 역량 및 역할",
+            query=f"{job_title} {state.get('job_role', 'general')} 채용 공고 핵심 역량 역할 다른 직군 경험과의 차이점",
         )
 
         system_prompt = self.system_prompt

@@ -32,22 +32,33 @@ AI 기반 자동화 면접 시스템으로, 채용 공고(JD)와 지원자 이�
 - **Judge Agent**: 최종 평가 리포트 및 추천 생성
 - **Insights Agent**: 후보자 인사이트 생성 (Soft-landing 플랜, 기여도/리스크 분석)
 
-### 2. RAG (Retrieval Augmented Generation)
-- FAISS 벡터 스토어를 활용한 지식 베이스 검색
-- 포지션별(백엔드, 프론트엔드, DevOps, ML/AI 등) 면접 가이드 및 평가 기준 제공
+### 2. RAG (Retrieval Augmented Generation) & Agentic RAG
+- **Pre-Retrieval**: 직군 분류 기반 필터링으로 관련 문서만 검색
+- **FAISS 벡터 스토어**: 지식 베이스 검색 및 유사도 기반 문서 검색
+- **Post-Retrieval**: 검색 결과 재랭킹, 관련성 평가, 중복 제거
+- **Agentic RAG**: 검색 품질 평가 후 필요시 웹 검색을 통한 정보 보완
+- **Tavily Search API**: 웹 검색을 통한 최신 정보 수집 및 검증
+- 포지션별(백엔드, 프론트엔드, DevOps, ML/AI, PM 등) 면접 가이드 및 평가 기준 제공
 - 각 에이전트가 RAG 컨텍스트를 활용하여 더 정확한 분석 수행
 
-### 3. LLM 관찰성 (Observability)
+### 3. 직군별 평가 시스템
+- **Role Classifier**: JD와 이력서를 분석하여 지원 직군 자동 분류
+- **직군별 평가 기준**: 각 직군(PM, Backend, Frontend 등)에 특화된 평가 기준 적용
+- **역량 차이점 구분**: 개발 경험과 PM 경험 등 직군 간 역량 차이를 명확히 구분하여 평가
+- **세분화된 역량 점수**: 각 역량별 배점 기반 상세 평가 (총 100점)
+- **전환 가능성 분석**: 지원자의 현재 배경과 목표 직군 간 차이점 분석 및 구체적 제안
+
+### 4. LLM 관찰성 (Observability)
 - **Langfuse** 통합을 통한 모든 LLM 호출 추적
 - 세션별, 에이전트별 상세 로그 및 성능 모니터링
 - 대시보드에서 실시간 추적 및 분석 가능
 
-### 4. 면접 이력 관리
+### 5. 면접 이력 관리
 - SQLite 데이터베이스를 통한 면접 결과 저장
 - 이력 조회 및 재평가 기능 제공
 - Streamlit UI를 통한 직관적인 인터페이스
 
-### 5. 인터랙티브 Streamlit UI & 파일 라이브러리
+### 6. 인터랙티브 Streamlit UI & 파일 라이브러리
 - 사이드바 네비게이션(Overview / Studio / History / Insights / Settings)로 페이지 전환
 - **Studio 페이지**: JD/이력서를 직접 입력하거나 **서버의 문서 라이브러리(docx/pdf/md/txt)**에서 불러오기
   - 면접 실행 기능
@@ -56,25 +67,25 @@ AI 기반 자동화 면접 시스템으로, 채용 공고(JD)와 지원자 이�
   - 코드 리팩토링 완료 (가독성 및 유지보수성 개선)
 - **Insights 페이지**: 저장된 면접 정보를 기반으로 LLM이 생성한 Soft-landing 플랜, 기여도/리스크 차트, 성장 추천 등 후보자 인사이트 시각화
 
-### 6. 지원자 지원 시스템
+### 7. 지원자 지원 시스템
 - **지원자 로그인/가입**: 이름과 생년월일로 간단한 회원가입 및 로그인
 - **채용공고 조회**: 등록된 채용공고 목록 조회 및 상세 정보 확인
 - **지원 기능**: 채용공고에 지원서 제출 (이력서 업로드, 자기소개서, MBTI 등)
 - **지원 상태 조회**: 본인의 지원 이력 및 상태 확인
 
-### 7. 로그인/인증 시스템
+### 8. 로그인/인증 시스템
 - **역할 기반 접근 제어**: 지원자(NORMAL)와 관리자(ADMIN) 역할 구분
 - **세션 관리**: Streamlit 세션 상태를 통한 로그인 상태 유지
 - **자동 리다이렉트**: 로그인 상태에 따른 페이지 자동 전환
 
-### 8. 채용공고 관리 시스템 (관리자용)
+### 9. 채용공고 관리 시스템 (관리자용)
 - **채용공고 등록**: PDF, DOCX, TXT, MD 파일 업로드 및 메타데이터 입력
 - **채용공고 목록 조회**: 등록된 채용공고 목록 조회 (접기/펼치기 기능)
 - **상태 관리**: 채용공고 상태 변경 (OPEN, CLOSED, ARCHIVED)
 - **파일 뷰어**: PDF 및 DOCX 파일을 깔끔한 뷰어로 표시
 - **UI/UX 개선**: 카드 기반 레이아웃, 간격 조정, 스크롤 및 포커싱 기능
 
-### 9. 모듈화된 UI 컴포넌트
+### 10. 모듈화된 UI 컴포넌트
 - **컴포넌트 기반 아키텍처**: 재사용 가능한 UI 컴포넌트로 구성
   - `login.py`: 로그인/가입 페이지 (지원자 및 관리자)
   - `volunteer.py`: 지원자 지원 시스템 (채용공고 조회, 지원, 상태 확인)
@@ -190,6 +201,9 @@ ai-interview-agent/
 ### LLM 및 임베딩
 - **Azure OpenAI**: GPT 모델 (ChatGPT-4, GPT-3.5-turbo 등)
 - **Azure OpenAI Embeddings**: 텍스트 임베딩 생성
+
+### 웹 검색
+- **Tavily Search API**: 웹 검색을 통한 최신 정보 수집 및 검증
 
 ### 데이터베이스
 - **SQLite**: 경량 관계형 데이터베이스 (면접 이력 저장)
@@ -526,6 +540,14 @@ LANGFUSE_ENABLED=true  # Langfuse 활성화 여부 (true/false, 기본값: true)
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
 LANGFUSE_HOST=https://cloud.langfuse.com
+
+# Tavily Search API 설정 (선택사항)
+TAVILY_API_KEY=your-tavily-api-key
+
+# Post-Retrieval 및 Agentic RAG 성능 튜닝 (선택사항)
+POST_RETRIEVAL_RELEVANCE_THRESHOLD=0.6  # 재랭킹 관련성 임계값
+WEB_SEARCH_QUALITY_THRESHOLD=0.5  # 웹 검색 트리거 품질 임계값
+MAX_WEB_SEARCH_RESULTS=3  # 최대 웹 검색 결과 수
 
 # CORS 설정
 BACKEND_CORS_ORIGINS=["http://localhost:8501","http://localhost:3000"]

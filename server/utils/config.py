@@ -153,6 +153,25 @@ class Settings(BaseSettings):
     # Embedding 모델 배포명
     AOAI_EMBEDDING_DEPLOYMENT: str
 
+    # ---------- 웹 검색 설정 ----------
+    # Tavily Search API
+    TAVILY_API_KEY: str | None = None
+    
+    # 웹 검색 우선순위 (tavily, llm_knowledge)
+    WEB_SEARCH_PRIORITY: str = "tavily,llm_knowledge"
+    
+    # ---------- Post-Retrieval 성능 튜닝 설정 ----------
+    # 재랭킹 관련성 임계값 (0.0 ~ 1.0, 기본값: 0.6)
+    # 이 값보다 낮은 관련성 점수를 가진 문서는 필터링됩니다
+    POST_RETRIEVAL_RELEVANCE_THRESHOLD: float = 0.6
+    
+    # 웹 검색 트리거 품질 임계값 (0.0 ~ 1.0, 기본값: 0.5)
+    # 검색 결과 품질 점수가 이 값보다 낮으면 웹 검색을 수행합니다
+    WEB_SEARCH_QUALITY_THRESHOLD: float = 0.5
+    
+    # 웹 검색 최대 결과 수 (기본값: 3)
+    MAX_WEB_SEARCH_RESULTS: int = 3
+    
     # ---------- Langfuse (선택) ----------
     LANGFUSE_ENABLED: bool = True  # Langfuse 활성/비활성 플래그 (기본값: True)
     LANGFUSE_PUBLIC_KEY: str | None = None

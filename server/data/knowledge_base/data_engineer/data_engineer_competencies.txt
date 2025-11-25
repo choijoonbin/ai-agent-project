@@ -1,8 +1,11 @@
-1. SQL 숙련도
-2. ETL/ELT 파이프라인 구축 능력
-3. Data Warehouse 설계 (Star Schema)
-4. BigQuery/Redshift/Snowflake 경험
-5. Kafka 기반 스트리밍 처리
-6. Python / Spark / Airflow
-7. 데이터 품질 관리
-8. 데이터 거버넌스
+Data Engineer Competencies
+1. 데이터 모델링(정규화, 스타 스키마, 스노우플레이크)
+2. ETL/ELT 파이프라인 구축(Airflow, Spark, Glue 등)
+3. SQL 최적화 및 대용량 데이터 처리
+4. Data Warehouse, Data Lake 설계
+5. Batch vs Streaming 데이터 처리
+6. Kafka/Kinesis 등 메시징 처리
+7. 데이터 품질 관리(DQ Rule, Validation, Lineage)
+8. Parquet/ORC 등 컬럼 포맷과 파티셔닝 전략
+9. 클라우드 데이터 플랫폼(BigQuery/Redshift/Snowflake)
+10. 데이터 보안/권한/PII 마스킹

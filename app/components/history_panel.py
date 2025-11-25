@@ -69,6 +69,30 @@ def _get_recommendation_cached(interview_id: int) -> str:
 
 # ---------- 메인 렌더링 ---------- #
 
+AGENT_LABELS = {
+    "JD_ANALYZER_AGENT": "JD 분석 에이전트",
+    "RESUME_ANALYZER_AGENT": "이력서 분석 에이전트",
+    "INTERVIEWER_AGENT": "면접관 에이전트",
+    "JUDGE_AGENT": "평가 에이전트",
+}
+
+
+def _render_rag_sources(state: Dict[str, Any]) -> None:
+    job_role = state.get("job_role", "general")
+    contexts = state.get("rag_contexts") or {}
+
+    st.markdown(f"**직군 태그**: `{job_role}`")
+
+    if not contexts:
+        st.caption("RAG 컨텍스트 기록이 없습니다.")
+        return
+
+    for agent_key, context_text in contexts.items():
+        label = AGENT_LABELS.get(agent_key, agent_key)
+        st.markdown(f"- **{label}**")
+        st.code(context_text.strip(), language="text")
+
+
 def render_history_tab() -> None:
     """면접 이력 조회 탭"""
 
@@ -287,6 +311,9 @@ def render_history_tab() -> None:
                         tab1, tab2, tab3 = st.tabs(
                             ["📊 평가 결과", "💬 인터뷰 질문 (답변/재평가)", "📦 원시 상태 데이터"]
                         )
+
+                        with st.expander("🔎 직군 & RAG 참고 정보", expanded=False):
+                            _render_rag_sources(state)
 
                         with tab1:
                             render_evaluation(state)

@@ -1,7 +1,7 @@
 # server/retrieval/vector_store.py
 
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
@@ -88,10 +88,21 @@ def get_vector_store(auto_build: bool = True) -> FAISS:
     raise RuntimeError("Vector store가 초기화되어 있지 않습니다.")
 
 
-def search_similar_documents(query: str, k: int = 5) -> List[Document]:
+def search_similar_documents(
+    query: str,
+    k: int = 5,
+    metadata_filter: Optional[Dict[str, Any]] = None,
+) -> List[Document]:
     """
     주어진 쿼리로 FAISS 벡터스토어에서 유사도가 높은 문서를 검색합니다.
     """
     vs = get_vector_store(auto_build=True)
-    results = vs.similarity_search(query, k=k)
+    try:
+        results = vs.similarity_search(query, k=k, filter=metadata_filter)
+    except TypeError:
+        # older langchain versions might not support filter argument
+        results = vs.similarity_search(query, k=k)
+        if metadata_filter:
+            role = metadata_filter.get("role")
+            results = [doc for doc in results if doc.metadata.get("role") == role]
     return results

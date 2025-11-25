@@ -1,4 +1,31 @@
-클라우드 이해 35
-K8s/Docker 실전능력 35
-문제 해결 20
-협업 10
+DevOps 엔지니어 평가 기준 (총점 100점)
+1. 인프라 및 시스템 운영 역량 (30점)
+* Linux/Unix 시스템 운영 경험 및 주요 명령어/서비스 이해
+* 네트워크 구조, 로드밸런싱, 보안, VPC/서브넷 등 인프라 설계 능력
+* 모니터링/로그 수집/알림 시스템 구성 (Prometheus, Grafana, ELK, CloudWatch 등)
+* 장애 대응 경험 및 운영 안정성 확보 능력
+2. CI/CD 및 자동화 능력 (25점)
+* CI/CD 파이프라인 구축 경험 (Jenkins, GitHub Actions, GitLab CI, ArgoCD 등)
+* IaC(Infrastructure as Code) 활용 능력 (Terraform, Ansible, CloudFormation 등)
+* 자동화 스크립트 작성 능력 (Bash, Python, Groovy 등)
+3. 클라우드 플랫폼 이해도 (20점)
+* AWS, Azure, GCP 등 클라우드 서비스 설계 및 운영 경험
+* 컴퓨팅, 스토리지, 네트워킹, 보안 등 서비스 활용 능력
+* 비용 최적화, 리소스 관리 역량
+4. 컨테이너 및 오케스트레이션 (15점)
+* Docker 기반 컨테이너 구성 및 최적화
+* Kubernetes 클러스터 운영, 서비스 배포 전략(Rolling, Blue/Green, Canary 등)
+* Helm, Service Mesh, Ingress 관리 능력
+5. 협업 및 커뮤니케이션 (10점)
+* Dev/QA/보안팀과 협업 및 요구사항 조율 능력
+* 기술적 이슈 및 개선안을 명확히 전달하고 설득하는 능력
+* 문제 해결 중심의 커뮤니케이션 및 문서화 능력
+
+**다른 직군 경험과의 차이점 (평가 시 주의사항)**
+* Backend 개발 경험을 DevOps 역량으로 평가할 때:
+  - 애플리케이션 개발 ≠ 인프라 운영: Backend는 서버 로직, API 개발을 의미하지만, DevOps는 인프라 구성, 서버 운영, 모니터링을 의미합니다.
+  - 로컬 개발 환경 구성 ≠ 프로덕션 인프라 설계: Backend는 개발 환경에서 코드 작성을 의미하지만, DevOps는 프로덕션 환경 인프라 설계, 자동화, CI/CD 구축을 의미합니다.
+  - 코드 리뷰 경험 ≠ 인프라 코드(IaC) 관리: Backend는 애플리케이션 코드 리뷰를 의미하지만, DevOps는 Terraform, CloudFormation 등 인프라 코드 관리를 의미합니다.
+* Frontend 개발 경험을 DevOps 역량으로 평가할 때:
+  - 프론트엔드 빌드/배포 ≠ 전체 인프라 운영: Frontend는 프론트엔드 빌드, 정적 호스팅을 의미하지만, DevOps는 전체 시스템 인프라, 네트워크, 보안, 모니터링을 의미합니다.
+* 평가 시 다른 직군 경험이 DevOps 역량의 일부 요소에만 해당할 수 있음을 고려하고, 보수적으로 평가하세요.

@@ -18,6 +18,8 @@ from db.models import Interview as InterviewModel
 from db.schemas import InterviewSchema, InterviewCreate
 from workflow.agents.judge_agent import JudgeAgent
 from workflow.agents.insights_agent import InsightsAgent
+from workflow.role_classifier import classify_job_role
+from retrieval.loader import get_available_roles
 
 router = APIRouter(
     prefix="/api/v1/workflow",
@@ -62,12 +64,21 @@ def run_interview_workflow(
         use_mini=request.use_mini,
     )
 
+    available_roles = get_available_roles() or ["general"]
+    detected_role = classify_job_role(
+        job_title=request.job_title,
+        jd_text=request.jd_text,
+        resume_text=request.resume_text,
+        available_roles=available_roles,
+    )
+
     initial_state: InterviewState = create_initial_state(
         job_title=request.job_title,
         candidate_name=request.candidate_name,
         jd_text=request.jd_text,
         resume_text=request.resume_text,
         total_questions=request.total_questions,
+        job_role=detected_role,
     )
 
     langfuse_handler = get_langfuse_handler(session_id=session_id)

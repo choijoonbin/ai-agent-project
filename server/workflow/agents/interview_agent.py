@@ -48,9 +48,10 @@ class InterviewerAgent(BaseAgent):
         candidate_skills = state["candidate_skills"]
         total_questions = state["total_questions"]
 
+        # RAG 검색 쿼리 개선: 역량 차이점을 고려한 질문 생성을 위해 키워드 추가
         rag_context = self._build_rag_context(
             state,
-            query=f"{job_title} 인터뷰 질문 예시 및 평가 기준",
+            query=f"{job_title} {state.get('job_role', 'general')} 인터뷰 질문 예시 평가 기준 역량 차이점",
         )
 
         system_prompt = self.system_prompt

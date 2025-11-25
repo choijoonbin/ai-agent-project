@@ -1,5 +1,11 @@
-1. 테스트 분석/설계 능력
-2. 테스트 자동화(Selenium, Playwright)
-3. API 테스트(Postman)
-4. 버그 리포트/재현 능력
-5. 품질 기준 정의
+QA / Test Engineer Competencies
+1. 테스트 계획/전략 수립 능력
+2. 테스트 케이스 설계 및 테스트 매트릭스 구성
+3. 기능/비기능/성능 테스트 수행 능력
+4. 테스트 자동화(Selenium, Cypress, JMeter)
+5. 결함 분석 및 버그 리포트 품질
+6. Severity / Priority 판단 능력
+7. 로그/모니터링/APM 활용
+8. 테스트 데이터/환경 구성 능력
+9. 회귀/통합 테스트 운영
+10. 품질 지표 기반 테스트 관리

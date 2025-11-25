@@ -13,6 +13,13 @@ import altair as alt
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:9898/api/v1")
 
+AGENT_LABELS = {
+    "JD_ANALYZER_AGENT": "JD 분석 에이전트",
+    "RESUME_ANALYZER_AGENT": "이력서 분석 에이전트",
+    "INTERVIEWER_AGENT": "면접관 에이전트",
+    "JUDGE_AGENT": "평가 에이전트",
+}
+
 
 # ==============================
 # 1) 공통 API 유틸
@@ -46,13 +53,19 @@ def fetch_interview_detail(interview_id: int) -> Dict[str, Any] | None:
 # 2) 인사이트 계산 헬퍼
 # ==============================
 
-def _safe_get_evaluation(detail: Dict[str, Any] | None) -> Dict[str, Any]:
+def _safe_get_state(detail: Dict[str, Any] | None) -> Dict[str, Any]:
     if not detail:
         return {}
     try:
-        state = json.loads(detail.get("state_json", "{}"))
+        return json.loads(detail.get("state_json", "{}"))
     except Exception:
         return {}
+
+
+def _safe_get_evaluation(detail: Dict[str, Any] | None) -> Dict[str, Any]:
+    if not detail:
+        return {}
+    state = _safe_get_state(detail)
     return state.get("evaluation") or {}
 
 
@@ -164,6 +177,22 @@ def _extract_risks(evaluation: Dict[str, Any]) -> List[str]:
     return risks
 
 
+def _render_rag_sources(state: Dict[str, Any]) -> None:
+    job_role = state.get("job_role", "general")
+    contexts = state.get("rag_contexts") or {}
+
+    st.markdown(f"**직군 태그**: `{job_role}`")
+
+    if not contexts:
+        st.caption("RAG 컨텍스트 기록이 없습니다.")
+        return
+
+    for agent_key, context_text in contexts.items():
+        label = AGENT_LABELS.get(agent_key, agent_key)
+        st.markdown(f"- **{label}**")
+        st.code(context_text.strip(), language="text")
+
+
 # ==============================
 # 3) 시각화 유틸
 # ==============================
@@ -265,6 +294,7 @@ def render_insights_page() -> None:
     st.session_state["insights_selected_interview_id"] = selected_id
 
     detail = fetch_interview_detail(selected_id)
+    state = _safe_get_state(detail)
     evaluation = _safe_get_evaluation(detail)
     scores = _safe_get_scores(evaluation)
     contrib = _estimate_contribution(scores)
@@ -304,6 +334,9 @@ def render_insights_page() -> None:
             st.write(summary)
         else:
             st.caption("Judge 평가 요약이 없어 간단 요약을 표시할 수 없습니다.")
+
+    with st.expander("🔎 직군 & RAG 참고 정보", expanded=False):
+        _render_rag_sources(state)
 
     st.markdown("---")
 
