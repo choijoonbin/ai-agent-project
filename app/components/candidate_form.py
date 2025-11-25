@@ -105,6 +105,7 @@ def _status_badge(status: str) -> str:
     labels = {
         "SUBMITTED": "지원완료",
         "DOCUMENT_REVIEW": "서류심사",
+        "INTERVIEW": "인터뷰진행",
         "PASSED": "합격",
         "REJECTED": "불합격",
         "CANCELLED": "지원취소",
@@ -112,6 +113,7 @@ def _status_badge(status: str) -> str:
     colors = {
         "SUBMITTED": "#0ea5e9",
         "DOCUMENT_REVIEW": "#6366f1",
+        "INTERVIEW": "#f97316",
         "PASSED": "#10b981",
         "REJECTED": "#ef4444",
         "CANCELLED": "#94a3b8",

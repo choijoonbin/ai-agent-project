@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 RESUME_DIR = ensure_dir(BASE_DIR / "data" / "resumes")
 
 
-ACTIVE_STATUSES = ["SUBMITTED", "DOCUMENT_REVIEW"]
+ACTIVE_STATUSES = ["SUBMITTED", "DOCUMENT_REVIEW", "INTERVIEW"]
 
 
 def _active_application(db: Session, member_id: int) -> models.Application | None:
@@ -140,7 +140,7 @@ def list_all_applications(db: Session = Depends(get_db)) -> List[schemas.Applica
 
 
 class ApplicationStatusUpdate(BaseModel):
-    status: str  # SUBMITTED | DOCUMENT_REVIEW | PASSED | REJECTED | CANCELLED
+    status: str  # SUBMITTED | DOCUMENT_REVIEW | INTERVIEW | PASSED | REJECTED | CANCELLED
 
 
 @router.patch("/{application_id}/status", response_model=schemas.ApplicationSchema)

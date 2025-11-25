@@ -41,6 +41,25 @@ def fetch_interview_detail(interview_id: int) -> Dict[str, Any] | None:
 import requests  # 아래에서 사용
 
 
+def _update_application_status(application_id: int, new_status: str) -> bool:
+    """Application 상태를 업데이트하고 성공 여부 반환."""
+    try:
+        resp = requests.patch(
+            f"{API_BASE_URL}/applications/{application_id}/status",
+            json={"status": new_status},
+            timeout=30,
+        )
+    except Exception as exc:
+        st.error(f"지원 상태 업데이트 실패: {exc}")
+        return False
+
+    if resp.status_code != 200:
+        st.error(f"지원 상태 업데이트 실패: {resp.text}")
+        return False
+
+    return True
+
+
 # ---------- 추천 결과 캐시 ---------- #
 
 def _get_recommendation_cached(interview_id: int) -> str:
@@ -144,7 +163,7 @@ def render_history_tab() -> None:
         with col3:
             st.selectbox(
                 "지원 상태",
-                options=["전체", "SUBMITTED", "DOCUMENT_REVIEW", "PASSED", "REJECTED", "CANCELLED"],
+                options=["전체", "SUBMITTED", "DOCUMENT_REVIEW", "INTERVIEW", "PASSED", "REJECTED", "CANCELLED"],
                 key="history_filter_status",
             )
 
@@ -242,6 +261,7 @@ def render_history_tab() -> None:
         status_labels = {
             "SUBMITTED": "지원완료",
             "DOCUMENT_REVIEW": "서류심사",
+            "INTERVIEW": "인터뷰진행",
             "PASSED": "합격",
             "REJECTED": "불합격",
             "CANCELLED": "지원취소",
@@ -249,6 +269,7 @@ def render_history_tab() -> None:
         status_colors = {
             "SUBMITTED": "#0ea5e9",
             "DOCUMENT_REVIEW": "#6366f1",
+            "INTERVIEW": "#f97316",
             "PASSED": "#10b981",
             "REJECTED": "#ef4444",
             "CANCELLED": "#94a3b8",
@@ -302,6 +323,7 @@ def render_history_tab() -> None:
         total_questions = item["total_questions"]
         status = item["status"]
         application_status = item.get("application_status")
+        application_id = item.get("application_id")
 
         cache_key_state = f"history_state_{interview_id}"
 
@@ -342,15 +364,22 @@ def render_history_tab() -> None:
                         st.session_state["history_selected_id"] = interview_id
                     st.rerun()
                 
-                # 인터뷰 진행 버튼
+                btn_disabled = application_status == "INTERVIEW" or not application_id
                 if st.button(
                     "💬 인터뷰 진행",
                     key=f"interview_{interview_id}",
                     use_container_width=True,
+                    disabled=btn_disabled,
+                    help=None if application_id else "연결된 지원서 정보가 없습니다.",
                 ):
-                    # 추후 기능 구현 예정
-                    st.info("인터뷰 진행 기능은 추후 구현 예정입니다.")
-                    # TODO: 인터뷰 진행 기능 구현
+                    if not application_id:
+                        st.error("연결된 지원서가 없어 상태를 변경할 수 없습니다.")
+                    else:
+                        if _update_application_status(application_id, "INTERVIEW"):
+                            st.success("지원 상태가 '인터뷰진행'으로 변경되었습니다.")
+                            # 상태 캐시 초기화
+                            st.session_state["history_rec_cache"] = {}
+                            st.rerun()
 
             # --- 선택된 카드라면, 바로 아래에 상세 패널 렌더 --- #
             if selected_id == interview_id:

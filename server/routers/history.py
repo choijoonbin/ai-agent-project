@@ -53,6 +53,7 @@ def list_interviews(
             app = db.query(Application).filter(Application.id == interview.application_id).first()
             if app:
                 interview_dict["application_status"] = app.status
+                interview_dict["application_id"] = app.id
         else:
             # application_id가 없으면 candidate_name으로 매칭 시도
             # 같은 이름의 지원자 중 가장 최근 Application 찾기
@@ -68,6 +69,7 @@ def list_interviews(
                 )
                 if app:
                     interview_dict["application_status"] = app.status
+                    interview_dict["application_id"] = app.id
                     # application_id도 업데이트 (선택적)
                     interview.application_id = app.id
         

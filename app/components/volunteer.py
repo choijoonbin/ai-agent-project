@@ -241,7 +241,7 @@ def render_job_detail_page() -> None:
                 st.markdown(f"**유형**: {rec.get('employment_type') or '미정'}")
                 st.markdown(f"**지역**: {rec.get('location') or '미정'}")
 
-                active_apps = [a for a in apps if a["status"] in ("SUBMITTED", "DOCUMENT_REVIEW")] if apps else []
+                active_apps = [a for a in apps if a["status"] in ("SUBMITTED", "DOCUMENT_REVIEW", "INTERVIEW")] if apps else []
                 has_active = bool(active_apps)
                 btn_label = "지원 진행중" if has_active else "지원하기"
 
@@ -349,7 +349,7 @@ def render_jobs_page() -> None:
     )
 
     apps = _fetch_my_applications(member_id) if member_id else []
-    active_app = next((a for a in apps if a["status"] in ("IN_PROGRESS", "SUBMITTED")), None)
+    active_app = next((a for a in apps if a["status"] in ("IN_PROGRESS", "SUBMITTED", "DOCUMENT_REVIEW", "INTERVIEW")), None)
 
     recs = _fetch_recruitments()
     if not recs:
@@ -392,6 +392,7 @@ def render_jobs_page() -> None:
         application_status_colors = {
             "SUBMITTED": "#0ea5e9",
             "DOCUMENT_REVIEW": "#6366f1",
+            "INTERVIEW": "#f97316",
             "PASSED": "#10b981",
             "REJECTED": "#ef4444",
             "CANCELLED": "#94a3b8",
@@ -399,6 +400,7 @@ def render_jobs_page() -> None:
         application_status_labels = {
             "SUBMITTED": "지원완료",
             "DOCUMENT_REVIEW": "서류심사",
+            "INTERVIEW": "인터뷰진행",
             "PASSED": "합격",
             "REJECTED": "불합격",
             "CANCELLED": "지원취소",
@@ -537,6 +539,7 @@ def render_status_page() -> None:
     status_colors = {
         "SUBMITTED": "#0ea5e9",
         "DOCUMENT_REVIEW": "#6366f1",
+        "INTERVIEW": "#f97316",
         "PASSED": "#10b981",
         "REJECTED": "#ef4444",
         "CANCELLED": "#94a3b8",
@@ -545,6 +548,7 @@ def render_status_page() -> None:
     status_labels = {
         "SUBMITTED": "지원완료",
         "DOCUMENT_REVIEW": "서류심사",
+        "INTERVIEW": "인터뷰진행",
         "PASSED": "합격",
         "REJECTED": "불합격",
         "CANCELLED": "지원취소",
@@ -582,8 +586,23 @@ def render_status_page() -> None:
                 submitted_at = format_to_kst(app.get("submitted_at"))
                 st.caption(f"제출 시각: {submitted_at}")
 
-            with c2:
-                if status in ("SUBMITTED", "DOCUMENT_REVIEW"):
+        with c2:
+            if status in ("SUBMITTED", "DOCUMENT_REVIEW"):
+                if st.button("지원취소", key=f"cancel_app_{app['id']}", use_container_width=True):
+                    try:
+                        resp = _patch(
+                            f"{API_BASE_URL}/applications/{app['id']}/status",
+                            {"status": "CANCELLED"},
+                        )
+                        if resp.status_code != 200:
+                            raise RuntimeError(resp.text)
+                        st.success("지원이 취소되었습니다.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"지원 취소 실패: {e}")
+            elif status == "INTERVIEW":
+                btn_cancel_col, btn_interview_col = st.columns(2)
+                with btn_cancel_col:
                     if st.button("지원취소", key=f"cancel_app_{app['id']}", use_container_width=True):
                         try:
                             resp = _patch(
@@ -596,7 +615,10 @@ def render_status_page() -> None:
                             st.rerun()
                         except Exception as e:
                             st.error(f"지원 취소 실패: {e}")
-                elif status == "CANCELLED":
-                    st.caption("취소됨")
-                else:
-                    st.caption("종료됨")
+                with btn_interview_col:
+                    if st.button("인터뷰 진행", key=f"interview_start_{app['id']}", use_container_width=True):
+                        st.info("인터뷰 진행 기능은 추후 제공될 예정입니다.")
+            elif status == "CANCELLED":
+                st.caption("취소됨")
+            else:
+                st.caption("종료됨")
