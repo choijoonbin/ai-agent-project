@@ -95,10 +95,9 @@ def start_interview(
 ) -> StartInterviewResponse:
     """
     실시간 면접 세션을 시작합니다.
-    1. 초기 상태 생성
-    2. JD/Resume 분석 실행
-    3. 첫 번째 질문 생성
-    4. 세션 ID 반환
+    1. 기존 Interview 레코드 확인 (이미 질문이 생성되어 있음)
+    2. 있으면 기존 질문 사용, 없으면 새로 생성
+    3. 세션 ID 반환
     """
     # 지원서 확인
     application = db.query(ApplicationModel).filter(
@@ -108,70 +107,119 @@ def start_interview(
     if not application:
         raise HTTPException(status_code=404, detail="지원서를 찾을 수 없습니다.")
     
+    # 기존 Interview 레코드 확인 (면접 스튜디오에서 생성된 것)
+    existing_interview = db.query(InterviewModel).filter(
+        InterviewModel.application_id == request.application_id,
+        InterviewModel.status == "DONE"  # 에이전트 실행 완료된 것
+    ).order_by(InterviewModel.created_at.desc()).first()
+    
     # 세션 ID 생성
     session_id = str(uuid.uuid4())
     
-    # 직무 분류
-    available_roles = get_available_roles() or ["general"]
-    detected_role = classify_job_role(
-        job_title=request.job_title,
-        jd_text=request.jd_text,
-        resume_text=request.resume_text,
-        available_roles=available_roles,
-    )
-    
-    # 초기 상태 생성
-    initial_state: InterviewState = create_initial_state(
-        job_title=request.job_title,
-        candidate_name=request.candidate_name,
-        jd_text=request.jd_text,
-        resume_text=request.resume_text,
-        total_questions=request.total_questions,
-        job_role=detected_role,
-    )
-    
-    print(f"🔄 [INFO] Graph 생성 및 분석 시작...")
-    
-    # Graph 생성 및 JD/Resume 분석 단계 실행
-    graph = create_interview_graph(
-        enable_rag=request.enable_rag,
-        session_id=session_id,
-        use_mini=True,
-    )
-    
-    langfuse_handler = get_langfuse_handler(session_id=session_id)
-    config = {
-        "callbacks": [langfuse_handler] if langfuse_handler else [],
-        "configurable": {"thread_id": session_id},
-        "tags": [f"session:{session_id}", "live_interview"],
-    }
-    
-    # JD_ANALYZER와 RESUME_ANALYZER까지만 실행
-    initial_state["status"] = "ANALYZING"
-    print(f"🔄 [INFO] JD/Resume 분석 중...")
-    analyzed_state = graph.invoke(initial_state, config=config)
-    print(f"✅ [INFO] JD/Resume 분석 완료")
-    
-    # Interviewer Agent로 모든 질문 생성
-    print(f"🔄 [INFO] InterviewerAgent로 {request.total_questions}개 질문 생성 시작...")
-    interviewer = InterviewerAgent(
-        use_rag=request.enable_rag,
-        session_id=session_id,
-        use_mini=True,
-    )
-    
-    # run() 메서드로 모든 질문 생성
-    updated_state = interviewer.run(analyzed_state)
-    print(f"✅ [INFO] 질문 생성 완료: {len(updated_state.get('qa_history', []))}개")
-    
-    # 첫 번째 질문 추출
-    if not updated_state["qa_history"] or len(updated_state["qa_history"]) == 0:
-        raise HTTPException(status_code=500, detail="질문 생성에 실패했습니다.")
-    
-    first_qa = updated_state["qa_history"][0]
-    
-    # 생성된 상태 사용 (모든 질문이 이미 qa_history에 있음)
-    analyzed_state = updated_state
+    if existing_interview:
+        # 기존 면접 레코드에서 질문 불러오기
+        print(f"✅ [INFO] 기존 면접 레코드 발견 (ID: {existing_interview.id})")
+        
+        # qa_history JSON 파싱
+        qa_history = json.loads(existing_interview.qa_history)
+        
+        if not qa_history or len(qa_history) == 0:
+            raise HTTPException(status_code=500, detail="기존 면접 레코드에 질문이 없습니다.")
+        
+        # 답변을 빈 문자열로 초기화
+        for qa in qa_history:
+            qa["answer"] = ""
+        
+        # 초기 상태 생성 (기존 데이터 사용)
+        jd_summary = json.loads(existing_interview.jd_summary) if existing_interview.jd_summary else ""
+        resume_summary = json.loads(existing_interview.resume_summary) if existing_interview.resume_summary else ""
+        
+        analyzed_state: InterviewState = {
+            "job_title": request.job_title,
+            "candidate_name": request.candidate_name,
+            "jd_text": request.jd_text,
+            "resume_text": request.resume_text,
+            "job_role": "general",
+            "jd_summary": jd_summary,
+            "jd_requirements": [],
+            "candidate_summary": resume_summary,
+            "candidate_skills": [],
+            "qa_history": qa_history,
+            "current_question_index": 0,
+            "total_questions": len(qa_history),
+            "status": "INTERVIEW",
+            "prev_agent": "",
+            "evaluation": None,
+        }
+        
+        first_qa = qa_history[0]
+        print(f"✅ [INFO] 기존 질문 로드 완료: {len(qa_history)}개")
+        
+    else:
+        # 기존 레코드가 없으면 새로 생성
+        print(f"⚠️ [INFO] 기존 면접 레코드 없음. 새로 생성합니다...")
+        
+        # 직무 분류
+        available_roles = get_available_roles() or ["general"]
+        detected_role = classify_job_role(
+            job_title=request.job_title,
+            jd_text=request.jd_text,
+            resume_text=request.resume_text,
+            available_roles=available_roles,
+        )
+        
+        # 초기 상태 생성
+        initial_state: InterviewState = create_initial_state(
+            job_title=request.job_title,
+            candidate_name=request.candidate_name,
+            jd_text=request.jd_text,
+            resume_text=request.resume_text,
+            total_questions=request.total_questions,
+            job_role=detected_role,
+        )
+        
+        print(f"🔄 [INFO] Graph 생성 및 분석 시작...")
+        
+        # Graph 생성 및 JD/Resume 분석 단계 실행
+        graph = create_interview_graph(
+            enable_rag=request.enable_rag,
+            session_id=session_id,
+            use_mini=True,
+        )
+        
+        langfuse_handler = get_langfuse_handler(session_id=session_id)
+        config = {
+            "callbacks": [langfuse_handler] if langfuse_handler else [],
+            "configurable": {"thread_id": session_id},
+            "tags": [f"session:{session_id}", "live_interview"],
+        }
+        
+        # JD_ANALYZER와 RESUME_ANALYZER까지만 실행
+        initial_state["status"] = "ANALYZING"
+        print(f"🔄 [INFO] JD/Resume 분석 중...")
+        analyzed_state = graph.invoke(initial_state, config=config)
+        print(f"✅ [INFO] JD/Resume 분석 완료")
+        
+        # Interviewer Agent로 모든 질문 생성
+        print(f"🔄 [INFO] InterviewerAgent로 {request.total_questions}개 질문 생성 시작...")
+        interviewer = InterviewerAgent(
+            use_rag=request.enable_rag,
+            session_id=session_id,
+            use_mini=True,
+        )
+        
+        # run() 메서드로 모든 질문 생성
+        updated_state = interviewer.run(analyzed_state)
+        print(f"✅ [INFO] 질문 생성 완료: {len(updated_state.get('qa_history', []))}개")
+        
+        # 첫 번째 질문 추출
+        if not updated_state["qa_history"] or len(updated_state["qa_history"]) == 0:
+            raise HTTPException(status_code=500, detail="질문 생성에 실패했습니다.")
+        
+        first_qa = updated_state["qa_history"][0]
+        
+        # 생성된 상태 사용 (모든 질문이 이미 qa_history에 있음)
+        analyzed_state = updated_state
     
     analyzed_state["status"] = "INTERVIEW"
     analyzed_state["current_question_index"] = 1
