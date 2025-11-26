@@ -171,3 +171,40 @@ async def upload_resume_file(file: UploadFile = File(...)) -> FileSummary:
         size=stat.st_size,
         modified_at=datetime.fromtimestamp(stat.st_mtime),
     )
+
+
+# ---------- 범용 파일 내용 읽기 (절대/상대 경로 지원) ---------- #
+
+@router.get("/content", response_model=FileContent)
+def get_file_content(file_path: str) -> FileContent:
+    """
+    절대 경로 또는 상대 경로로 파일 내용을 읽습니다.
+    보안을 위해 server/data 디렉토리 내 파일만 접근 가능합니다.
+    """
+    path = Path(file_path)
+    
+    # 절대 경로인 경우
+    if path.is_absolute():
+        # 보안: server/data 디렉토리 내부인지 확인
+        data_dir = BASE_DIR / "data"
+        try:
+            path = path.resolve()
+            if not str(path).startswith(str(data_dir.resolve())):
+                raise HTTPException(status_code=403, detail="접근이 거부되었습니다.")
+        except Exception:
+            raise HTTPException(status_code=400, detail="잘못된 파일 경로입니다.")
+    else:
+        # 상대 경로인 경우 BASE_DIR 기준으로 해석
+        path = (BASE_DIR / file_path).resolve()
+        data_dir = BASE_DIR / "data"
+        if not str(path).startswith(str(data_dir.resolve())):
+            raise HTTPException(status_code=403, detail="접근이 거부되었습니다.")
+    
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail=f"파일을 찾을 수 없습니다: {path.name}")
+    
+    if path.suffix.lower() not in ALLOWED_EXTS:
+        raise HTTPException(status_code=400, detail="지원하지 않는 파일 형식입니다.")
+    
+    content = _read_file_text(path)
+    return FileContent(id=path.name, filename=path.name, content=content)
