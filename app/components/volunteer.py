@@ -617,17 +617,52 @@ def render_status_page() -> None:
                             st.error(f"지원 취소 실패: {e}")
                 with btn_interview_col:
                     if st.button("인터뷰 진행", key=f"interview_start_{app['id']}", use_container_width=True):
+                        # 채용공고 정보 가져오기
+                        rec = app.get("recruitment", {})
+                        job_title = rec.get("title", "채용 포지션")
+                        
+                        # JD 텍스트 가져오기
+                        jd_path = rec.get("jd_file_path", "")
+                        jd_text = ""
+                        if jd_path:
+                            try:
+                                resp = _get(f"{API_BASE_URL}/files/content?file_path={jd_path}")
+                                if resp.status_code == 200:
+                                    jd_text = resp.json().get("content", "")
+                            except:
+                                jd_text = rec.get("description", "JD 정보 없음")
+                        else:
+                            jd_text = rec.get("description", "JD 정보 없음")
+                        
+                        # 이력서 텍스트 가져오기
+                        resume_path = app.get("resume_path", "")
+                        resume_text = ""
+                        if resume_path:
+                            try:
+                                resp = _get(f"{API_BASE_URL}/files/content?file_path={resume_path}")
+                                if resp.status_code == 200:
+                                    resume_text = resp.json().get("content", "")
+                            except:
+                                resume_text = "이력서 정보 없음"
+                        else:
+                            resume_text = app.get("cover_letter", "이력서 정보 없음")
+                        
                         st.session_state["interview_live_context"] = {
                             "interview_id": None,
                             "application_id": app["id"],
                             "candidate_name": st.session_state.get("member_name", "지원자"),
+                            "job_title": job_title,
+                            "jd_text": jd_text,
+                            "resume_text": resume_text,
                             "role": "candidate",
                             "origin_nav": st.session_state.get("nav_selected_code", "status"),
-                            "current_question": 1,
+                            "current_question": 0,
                             "total_questions": 5,
-                            "question_text": "본인의 핵심 역량을 90초 안에 소개해주세요.",
+                            "question_text": "AI 면접관이 첫 질문을 준비하고 있습니다.",
+                            "question_category": "일반",
                             "time_limit": 90,
                             "transcript": [],
+                            "interview_started": False,
                         }
                         st.session_state["interview_live_started"] = False
                         st.session_state["nav_selected_code"] = "interview_live"
