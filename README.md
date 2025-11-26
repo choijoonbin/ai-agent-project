@@ -91,13 +91,25 @@ AI 기반 자동화 면접 시스템으로, 채용 공고(JD)와 지원자 이�
 - **파일 뷰어**: PDF 및 DOCX 파일을 깔끔한 뷰어로 표시
 - **UI/UX 개선**: 카드 기반 레이아웃, 간격 조정, 스크롤 및 포커싱 기능
 
-### 10. 모듈화된 UI 컴포넌트
+### 10. 실시간 AI 화상 면접 시스템
+- **WebRTC 기반 실시간 면접**: 브라우저에서 바로 비디오/오디오 스트리밍
+- **음성 인식(STT)**: Faster-Whisper large-v3 모델로 로컬 처리 (무료, API 키 불필요)
+- **음성 합성(TTS)**: Google gTTS로 한국어 고품질 음성 생성 (무료)
+- **LangGraph 실시간 연동**: 
+  - 답변 제출 시 자동으로 다음 질문 생성
+  - 면접 완료 시 자동 평가 및 DB 저장
+- **몰입형 듀얼 뷰 UI**: AI 면접관 / 지원자 화면 분할
+- **진행률 추적**: 실시간 질문 번호, 진행률 표시
+- **녹음 파일 저장**: 향후 비디오 녹화 기능 확장 예정
+
+### 11. 모듈화된 UI 컴포넌트
 - **컴포넌트 기반 아키텍처**: 재사용 가능한 UI 컴포넌트로 구성
   - `login.py`: 로그인/가입 페이지 (지원자 및 관리자)
   - `volunteer.py`: 지원자 지원 시스템 (채용공고 조회, 지원, 상태 확인)
   - `candidate_form.py`: Studio 페이지 (JD/이력서 입력, 면접 실행, 지원 이력 조회, 채용공고 조회) - 리팩토링 완료
   - `recruitment_admin.py`: 채용공고 관리 페이지 (관리자용 - 채용공고 등록, 목록 조회, 상태 변경, 파일 뷰어)
   - `history_panel.py`: 면접 이력 조회 및 상세 보기
+  - `interview_live.py`: 실시간 AI 화상 면접 화면
   - `interview_chat.py`: 질문/답변 인터페이스 및 평가 결과 렌더링
   - `insights.py`: 후보자 인사이트 페이지 (Soft-landing, 기여도/리스크 차트)
   - `sidebar.py`: 네비게이션 & 설정 사이드바 (UI 모드, RAG 옵션 등)
@@ -202,7 +214,12 @@ ai-interview-agent/
 - **Pydantic** (2.0.0+): 데이터 검증 및 설정 관리
 
 ### 프론트엔드
-- **Streamlit** (최신): 빠른 웹 UI 개발 프레임워크
+- **Streamlit** (1.28.0+): 빠른 웹 UI 개발 프레임워크
+- **streamlit-webrtc** (0.47.6+): WebRTC 기반 실시간 비디오/오디오 스트리밍
+
+### 음성 처리
+- **Faster-Whisper** (1.1.0+): 로컬 STT (Speech-to-Text) - 무료, API 키 불필요
+- **gTTS** (2.5.0+): Google Text-to-Speech - 무료, 한국어 고품질
 
 ### LLM 및 임베딩
 - **Azure OpenAI**: GPT 모델 (ChatGPT-4, GPT-3.5-turbo 등)
@@ -762,6 +779,96 @@ API_BASE_URL=http://localhost:9898/api/v1
   "mbti": "INTJ",
   "cover_letter": "자기소개서 내용...",
   "resume_path": "server/data/resumes/resume_1.pdf"
+}
+```
+
+### 실시간 면접 API
+
+#### `POST /api/v1/interview-live/start`
+실시간 면접 세션을 시작하고 첫 질문을 생성합니다.
+
+**Request Body:**
+```json
+{
+  "application_id": 1,
+  "candidate_name": "홍길동",
+  "job_title": "백엔드 개발자",
+  "jd_text": "채용공고 전문...",
+  "resume_text": "이력서 전문...",
+  "total_questions": 5,
+  "enable_rag": true
+}
+```
+
+**Response:**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "first_question": "먼저 자기소개를 부탁드립니다...",
+  "question_category": "일반",
+  "current_question_num": 1,
+  "total_questions": 5
+}
+```
+
+#### `POST /api/v1/interview-live/submit-answer`
+답변을 제출하고 다음 질문을 받습니다.
+
+**Request Body:**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "answer": "저는 3년간 백엔드 개발 경험이 있습니다..."
+}
+```
+
+**Response (계속):**
+```json
+{
+  "status": "continue",
+  "next_question": "프로젝트에서 어떤 기술을 사용하셨나요?",
+  "question_category": "기술",
+  "current_question_num": 2,
+  "total_questions": 5
+}
+```
+
+**Response (완료):**
+```json
+{
+  "status": "finished",
+  "current_question_num": 5,
+  "total_questions": 5,
+  "evaluation": {
+    "summary": "전반적으로 우수한 답변...",
+    "recommendation": "Hire",
+    "scores": {"기술역량": 4.5, "커뮤니케이션": 4.0}
+  }
+}
+```
+
+#### `POST /api/v1/interview-live/end`
+면접을 종료하고 결과를 DB에 저장합니다.
+
+**Request Body:**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "interview_id": 42,
+  "evaluation": {
+    "summary": "전반적으로 우수한 답변...",
+    "strengths": ["강점1", "강점2"],
+    "weaknesses": ["약점1"],
+    "recommendation": "Hire",
+    "scores": {}
+  }
 }
 ```
 

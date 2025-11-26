@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import uuid
 import wave
+import requests
 from pathlib import Path
 from collections import deque
 from threading import Lock
@@ -34,22 +35,90 @@ RTC_CONFIG = RTCConfiguration(
     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
+# Backend API URL
+BACKEND_URL = "http://localhost:9898"
+
+
+# ========== API Helper Functions ========== #
+
+def _start_interview_session(application_id: int, candidate_name: str, job_title: str, 
+                             jd_text: str, resume_text: str, total_questions: int = 5) -> Dict[str, Any]:
+    """면접 세션 시작 API 호출"""
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/api/v1/interview-live/start",
+            json={
+                "application_id": application_id,
+                "candidate_name": candidate_name,
+                "job_title": job_title,
+                "jd_text": jd_text,
+                "resume_text": resume_text,
+                "total_questions": total_questions,
+                "enable_rag": True,
+            },
+            timeout=60,  # 첫 질문 생성에 시간이 걸릴 수 있음
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"면접 시작 중 오류 발생: {e}")
+        return {}
+
+
+def _submit_answer(session_id: str, answer: str) -> Dict[str, Any]:
+    """답변 제출 및 다음 질문 받기 API 호출"""
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/api/v1/interview-live/submit-answer",
+            json={
+                "session_id": session_id,
+                "answer": answer,
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"답변 제출 중 오류 발생: {e}")
+        return {}
+
+
+def _end_interview(session_id: str) -> Dict[str, Any]:
+    """면접 종료 API 호출"""
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/api/v1/interview-live/end",
+            json={"session_id": session_id},
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"면접 종료 중 오류 발생: {e}")
+        return {}
+
 
 def _init_context() -> Dict[str, Any]:
     """Interview Live 화면에서 사용할 기본 컨텍스트를 반환."""
     default_context = {
+        "session_id": None,  # 백엔드 면접 세션 ID
         "interview_id": None,
         "application_id": None,
         "candidate_name": "지원자",
+        "job_title": "",
+        "jd_text": "",
+        "resume_text": "",
         "role": "candidate",
         "origin_nav": "status",
-        "current_question": 1,
+        "current_question": 0,
         "total_questions": 5,
         "question_text": "AI 면접관이 첫 질문을 준비하고 있습니다.",
+        "question_category": "일반",
         "time_limit": 90,
         "transcript": [],
         "last_recording_path": None,
         "last_transcript": "",
+        "interview_started": False,  # 실제 면접 시작 여부
     }
     ctx = st.session_state.setdefault("interview_live_context", default_context)
 
@@ -98,8 +167,35 @@ def _render_preflight_steps(ctx: Dict[str, Any]) -> None:
             st.rerun()
     with button_cols[1]:
         if st.button("✅ 면접 시작하기", type="primary", use_container_width=True):
-            st.session_state["interview_live_started"] = True
-            st.rerun()
+            # 면접 세션 시작 - 백엔드 API 호출
+            if not ctx.get("application_id"):
+                st.error("지원서 정보가 없습니다. 면접을 시작할 수 없습니다.")
+                return
+            
+            with st.spinner("면접을 준비하고 있습니다... (첫 질문을 생성 중)"):
+                result = _start_interview_session(
+                    application_id=ctx["application_id"],
+                    candidate_name=ctx["candidate_name"],
+                    job_title=ctx.get("job_title", ""),
+                    jd_text=ctx.get("jd_text", ""),
+                    resume_text=ctx.get("resume_text", ""),
+                    total_questions=ctx["total_questions"],
+                )
+            
+            if result and "session_id" in result:
+                # 세션 정보 저장
+                ctx["session_id"] = result["session_id"]
+                ctx["question_text"] = result["first_question"]
+                ctx["question_category"] = result.get("question_category", "일반")
+                ctx["current_question"] = result["current_question_num"]
+                ctx["total_questions"] = result["total_questions"]
+                ctx["interview_started"] = True
+                
+                st.session_state["interview_live_started"] = True
+                st.success(f"✅ 면접이 시작되었습니다! (세션 ID: {result['session_id'][:8]}...)")
+                st.rerun()
+            else:
+                st.error("면접 시작에 실패했습니다. 백엔드 서버 상태를 확인해주세요.")
 
 
 def _render_timer_html(seconds: int) -> str:
@@ -252,9 +348,16 @@ def render_interview_live_page() -> None:
             st.rerun()
 
     with header_cols[1]:
-        progress_val = ctx["current_question"] / max(ctx["total_questions"], 1)
-        st.progress(progress_val, text=f"진행률: {ctx['current_question']}/{ctx['total_questions']} 질문")
-        st.metric("현재 질문", f"Q{ctx['current_question']:02d}", ctx.get("question_text", ""))
+        current = max(ctx["current_question"], 0)
+        total = max(ctx["total_questions"], 1)
+        progress_val = current / total if current > 0 else 0.0
+        st.progress(progress_val, text=f"진행률: {current}/{total} 질문")
+        
+        if current > 0:
+            question_preview = ctx.get("question_text", "")[:50] + "..." if len(ctx.get("question_text", "")) > 50 else ctx.get("question_text", "")
+            st.metric("현재 질문", f"Q{current:02d}", question_preview)
+        else:
+            st.info("면접을 시작하려면 '면접 시작하기' 버튼을 눌러주세요.")
 
     with header_cols[2]:
         st.markdown(_render_timer_html(ctx.get("time_limit", 90)), unsafe_allow_html=True)
@@ -273,11 +376,19 @@ def render_interview_live_page() -> None:
                     (AI 아바타 스트림 / TTS 출력)
                 </div>
                 <div style="margin-top:8px;">
-                    <p style="margin:0;font-weight:600;color:#67e8f9;">현재 질문</p>
+                    <p style="margin:0;font-weight:600;color:#67e8f9;">
+                        현재 질문 
+                        <span style="background:rgba(45,212,191,0.2);padding:2px 8px;border-radius:4px;font-size:0.8rem;margin-left:8px;">
+                            {category}
+                        </span>
+                    </p>
                     <p style="margin:4px 0 0;color:#e0f2fe;font-size:1rem;">{question}</p>
                 </div>
             </div>
-            """.format(question=ctx.get("question_text", "")),
+            """.format(
+                question=ctx.get("question_text", "면접을 시작하면 질문이 표시됩니다."),
+                category=ctx.get("question_category", "일반")
+            ),
             unsafe_allow_html=True,
         )
 
@@ -385,7 +496,37 @@ def render_interview_live_page() -> None:
                             ctx["last_transcript"] = text
                             ctx.setdefault("transcript", []).append(text or "(인식 실패)")
                             transcript_placeholder.code("\n".join(ctx["transcript"]), language="text")
-                            st.success("STT 결과가 업데이트되었습니다.")
+                            st.success(f"✅ STT 완료: {text[:100]}..." if len(text) > 100 else f"✅ STT 완료: {text}")
+                            
+                            # 백엔드로 답변 제출
+                            if ctx.get("session_id") and ctx.get("interview_started"):
+                                with st.spinner("답변을 제출하고 다음 질문을 준비 중..."):
+                                    result = _submit_answer(ctx["session_id"], text)
+                                
+                                if result and "status" in result:
+                                    if result["status"] == "continue":
+                                        # 다음 질문으로 진행
+                                        ctx["question_text"] = result["next_question"]
+                                        ctx["question_category"] = result.get("question_category", "일반")
+                                        ctx["current_question"] = result["current_question_num"]
+                                        st.success(f"✅ Q{ctx['current_question']}: {ctx['question_text'][:50]}...")
+                                        st.rerun()
+                                    elif result["status"] == "finished":
+                                        # 면접 종료
+                                        st.success("🎉 모든 질문이 완료되었습니다!")
+                                        ctx["interview_started"] = False
+                                        
+                                        # 평가 결과 표시
+                                        if "evaluation" in result:
+                                            st.json(result["evaluation"])
+                                        
+                                        # 면접 종료 처리
+                                        end_result = _end_interview(ctx["session_id"])
+                                        if end_result and "interview_id" in end_result:
+                                            ctx["interview_id"] = end_result["interview_id"]
+                                            st.info(f"면접 결과가 저장되었습니다. (ID: {end_result['interview_id']})")
+                                else:
+                                    st.warning("답변 제출에 실패했습니다. 다시 시도해주세요.")
                         except Exception as exc:
                             st.error(f"STT 변환 중 오류: {exc}")
 

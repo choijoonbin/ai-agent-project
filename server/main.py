@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 
 from utils.config import settings
 from db.database import Base, engine
-from routers import workflow, history, files
+from routers import workflow, history, files, interview_live
 from routers import auth, recruitments, applications
 
 
@@ -59,6 +59,7 @@ def create_app() -> FastAPI:
 
     # 라우터 등록
     app.include_router(workflow.router)
+    app.include_router(interview_live.router)  # 실시간 면접 라우터
     app.include_router(history.router)
     app.include_router(files.router)  # 파일 관리 라우터 추가
     app.include_router(auth.router)
