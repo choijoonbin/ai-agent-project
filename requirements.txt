@@ -47,3 +47,5 @@ tavily-python>=0.3.0
 
 # Audio / Video
 streamlit-webrtc>=0.47.6
+faster-whisper>=1.1.0
+gTTS>=2.5.0

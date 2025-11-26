@@ -72,3 +72,10 @@ htmlcov/
 # Langfuse
 langfuse_cache/
 
+# Interview recordings (audio/video files)
+server/data/interview_recordings/
+*.wav
+*.mp3
+*.mp4
+*.webm
+

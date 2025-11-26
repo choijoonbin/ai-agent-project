@@ -111,29 +111,70 @@ def _render_timer_html(seconds: int) -> str:
 class InterviewAudioProcessor(AudioProcessorBase):
     """웹캠에서 수신한 오디오 프레임을 버퍼에 적재하고 필요 시 추출."""
 
+    # 클래스 레벨에서 인스턴스 추적
+    _instance: Optional["InterviewAudioProcessor"] = None
+
     def __init__(self) -> None:
+        super().__init__()  # 부모 클래스 초기화 명시
         self._buffer: Deque[np.ndarray] = deque(maxlen=1600)
         self._sample_rate: Optional[int] = None
         self._channels: Optional[int] = None
         self._lock = Lock()
+        self._frame_count = 0  # 디버깅용 카운터
+        InterviewAudioProcessor._instance = self
+        print(f"🔧 [DEBUG] InterviewAudioProcessor 인스턴스 생성됨: {id(self)}")
 
     def recv(self, frame):
-        self._sample_rate = frame.sample_rate
-        self._channels = len(frame.layout.names)
-        arr = frame.to_ndarray()
-        with self._lock:
-            self._buffer.append(arr.copy())
-        return frame
+        """오디오 프레임 수신 및 버퍼 저장"""
+        try:
+            self._sample_rate = frame.sample_rate
+            # PyAV AudioLayout에서 채널 수 가져오기
+            if hasattr(frame.layout, 'channels'):
+                self._channels = frame.layout.channels
+            elif hasattr(frame.layout, 'nb_channels'):
+                self._channels = frame.layout.nb_channels
+            else:
+                # 기본값: 스테레오
+                self._channels = 2
+                
+            arr = frame.to_ndarray()
+            with self._lock:
+                self._buffer.append(arr.copy())
+                self._frame_count += 1
+                # 처음 10개 프레임은 로그 출력
+                if self._frame_count <= 10:
+                    print(f"🎤 [DEBUG] 프레임 수신됨 #{self._frame_count}: shape={arr.shape}, rate={self._sample_rate}, channels={self._channels}")
+            return frame
+        except Exception as e:
+            print(f"❌ [DEBUG] recv() 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
-    def dump_audio(self) -> Tuple[List[np.ndarray], int]:
+    def dump_audio(self) -> Tuple[List[np.ndarray], int, int]:
+        """버퍼의 오디오 데이터를 추출하고 프레임 카운트도 반환"""
         with self._lock:
             if not self._buffer:
-                return [], 0
+                return [], 0, self._frame_count
             arrays = list(self._buffer)
             self._buffer.clear()
+            frame_count = self._frame_count
+            self._frame_count = 0  # 카운터 리셋
         if not self._sample_rate:
-            return [], 0
-        return arrays, self._sample_rate
+            return [], 0, frame_count
+        print(f"📤 [DEBUG] dump_audio() 호출됨: {len(arrays)}개 청크, {frame_count}개 프레임")
+        return arrays, self._sample_rate, frame_count
+
+    @classmethod
+    def get_instance(cls) -> Optional["InterviewAudioProcessor"]:
+        """현재 활성화된 프로세서 인스턴스 반환"""
+        return cls._instance
+
+
+def create_audio_processor():
+    """AudioProcessor Factory 함수"""
+    print(f"🏭 [DEBUG] create_audio_processor() 호출됨")
+    return InterviewAudioProcessor()
 
 
 def render_interview_live_page() -> None:
@@ -259,17 +300,30 @@ def render_interview_live_page() -> None:
             key="candidate-stream",
             mode=WebRtcMode.SENDRECV,
             rtc_configuration=RTC_CONFIG,
-            media_stream_constraints={"video": True, "audio": True},
-            audio_receiver_size=1024,
+            media_stream_constraints={
+                "video": {"width": 640, "height": 480},
+                "audio": {
+                    "echoCancellation": True,
+                    "noiseSuppression": True,
+                    "autoGainControl": True,
+                }
+            },
             async_processing=True,
-            audio_processor_factory=InterviewAudioProcessor,
+            audio_processor_factory=create_audio_processor,  # Factory 함수 사용
         )
 
         connection_ready = bool(webrtc_ctx and webrtc_ctx.state.playing)
         if connection_ready:
-            st.success("카메라/마이크 연결이 확인되었습니다.")
+            st.success("✅ 카메라/마이크 연결이 확인되었습니다.")
+            # 프로세서 상태 확인
+            processor = InterviewAudioProcessor.get_instance()
+            if processor:
+                st.info(f"🎤 오디오 프로세서 활성화됨 (현재 버퍼: {len(processor._buffer)}개 프레임)")
+            else:
+                st.warning("⚠️ 오디오 프로세서가 초기화되지 않았습니다. 몇 초 기다린 후 말씀해주세요.")
         else:
             st.info("연결 대기 중입니다. 브라우저 접근 권한을 허용해주세요.")
+            st.caption("💡 팁: 브라우저 주소창 왼쪽의 아이콘을 클릭해 마이크 권한을 '허용'으로 설정하세요.")
 
     st.markdown("---")
 
@@ -291,13 +345,33 @@ def render_interview_live_page() -> None:
     with col_rec:
         record_disabled = not connection_ready
         if st.button("💾 녹음 저장 및 STT", use_container_width=True, disabled=record_disabled):
-            processor = getattr(webrtc_ctx, "audio_processor", None)
+            # webrtc_ctx에서 audio_processor 가져오기
+            processor = None
+            if hasattr(webrtc_ctx, "audio_processor"):
+                processor = webrtc_ctx.audio_processor
+                print(f"🔍 [DEBUG] webrtc_ctx.audio_processor: {processor}, type={type(processor)}")
+            
+            # webrtc_ctx에 없으면 클래스 레벨 인스턴스 사용
+            if not processor:
+                processor = InterviewAudioProcessor.get_instance()
+                print(f"🔍 [DEBUG] InterviewAudioProcessor.get_instance(): {processor}, type={type(processor)}")
+            
             if not isinstance(processor, InterviewAudioProcessor):
-                st.error("오디오 프로세서를 초기화하지 못했습니다. 페이지를 새로고침 후 다시 시도해주세요.")
+                st.error("⚠️ 오디오 프로세서를 찾을 수 없습니다.")
+                st.info(f"디버그: webrtc_ctx 타입={type(webrtc_ctx)}, processor={processor}")
+                st.caption("페이지를 새로고침하고, 'Start' 버튼을 누른 후 몇 초 기다린 후 다시 시도해주세요.")
             else:
-                chunks, sample_rate = processor.dump_audio()
+                chunks, sample_rate, frame_count = processor.dump_audio()
+                st.info(f"🔍 디버그: 수신된 프레임 수={frame_count}, 버퍼 청크={len(chunks)}, 샘플레이트={sample_rate}")
+                
                 if not chunks or not sample_rate:
-                    st.warning("수신된 오디오 데이터가 없습니다. 몇 초간 말한 후 다시 시도해주세요.")
+                    st.warning(f"수신된 오디오 데이터가 없습니다. 몇 초간 말한 후 다시 시도해주세요. (프레임 카운트: {frame_count})")
+                    if frame_count == 0:
+                        st.error("⚠️ 오디오 프레임이 전혀 수신되지 않았습니다.")
+                        st.caption("🔧 **디버깅 힌트:**")
+                        st.caption("1. 터미널에 `🏭 [DEBUG] create_audio_processor() 호출됨` 메시지가 있는지 확인")
+                        st.caption("2. 터미널에 `🎤 [DEBUG] 프레임 수신됨` 메시지가 있는지 확인")
+                        st.caption("3. 브라우저 콘솔(F12)에서 WebRTC 관련 오류 메시지 확인")
                 else:
                     try:
                         file_path = _save_audio_chunks(chunks, sample_rate)
@@ -305,7 +379,7 @@ def render_interview_live_page() -> None:
                         st.error(f"녹음 파일 저장 중 오류: {exc}")
                     else:
                         ctx["last_recording_path"] = str(file_path)
-                        st.success(f"녹음 파일 저장: {file_path.name}")
+                        st.success(f"✅ 녹음 파일 저장: {file_path.name} (프레임 {frame_count}개, 청크 {len(chunks)}개)")
                         try:
                             text = transcribe_audio(file_path)
                             ctx["last_transcript"] = text
@@ -318,8 +392,10 @@ def render_interview_live_page() -> None:
     with col_tts:
         if st.button("🔊 AI 질문 음성 재생", use_container_width=True):
             try:
-                audio_bytes = synthesize_speech(ctx.get("question_text", ""))
-                st.audio(audio_bytes, format="audio/wav")
+                audio_bytes = synthesize_speech(ctx.get("question_text", "질문이 없습니다."))
+                # gTTS는 MP3 포맷으로 출력
+                st.audio(audio_bytes, format="audio/mp3")
+                st.success("✅ TTS 음성 재생 완료")
             except Exception as exc:
                 st.error(f"TTS 실행 중 오류: {exc}")
 
