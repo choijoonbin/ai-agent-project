@@ -140,7 +140,7 @@ def list_all_applications(db: Session = Depends(get_db)) -> List[schemas.Applica
 
 
 class ApplicationStatusUpdate(BaseModel):
-    status: str  # SUBMITTED | DOCUMENT_REVIEW | INTERVIEW | PASSED | REJECTED | CANCELLED
+    status: str  # SUBMITTED | DOCUMENT_REVIEW | INTERVIEW | INTERVIEW_COMPLETED | PASSED | REJECTED | CANCELLED
 
 
 @router.patch("/{application_id}/status", response_model=schemas.ApplicationSchema)

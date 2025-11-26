@@ -36,6 +36,7 @@ class Interview(Base):
     resume_text = Column(Text, nullable=False)
 
     state_json = Column(Text, nullable=False)  # LangGraph 최종 상태를 JSON 문자열로
+    video_path = Column(String(1024), nullable=True)  # 면접 녹화 영상 경로
 
     created_at = Column(
         DateTime(timezone=True),

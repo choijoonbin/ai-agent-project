@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import json
 import uuid
+import base64
 from typing import Any, Dict, List, Optional
 from datetime import datetime
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -82,9 +84,10 @@ class EndInterviewRequest(BaseModel):
 
 class EndInterviewResponse(BaseModel):
     """면접 종료 응답"""
-    status: str
-    interview_id: int
-    evaluation: Dict[str, Any]
+    status: str = "success"
+    interview_id: Optional[int] = None
+    message: str = "면접이 성공적으로 종료되었습니다."
+    evaluation: Optional[Dict[str, Any]] = None
 
 
 # ========== API Endpoints ========== #
@@ -314,55 +317,89 @@ def end_interview(
 ) -> EndInterviewResponse:
     """
     면접을 종료하고 결과를 DB에 저장합니다.
+    세션이 없는 경우 (서버 재시작 등) 부분 저장을 시도합니다.
     """
     # 세션 확인
     if request.session_id not in _active_sessions:
-        raise HTTPException(status_code=404, detail="면접 세션을 찾을 수 없습니다.")
+        # 세션이 없으면 부분 저장 없이 종료만 처리
+        return EndInterviewResponse(
+            message="면접 세션이 만료되었습니다. 답변 내역이 일부 저장되지 않을 수 있습니다.",
+            interview_id=None,
+        )
     
     state = _active_sessions[request.session_id]
     
+    # InterviewState 필수 필드 보장 (누락 시 기본값 설정)
+    if "rag_contexts" not in state:
+        state["rag_contexts"] = {}
+    if "rag_docs" not in state:
+        state["rag_docs"] = {}
+    if "web_search_info" not in state:
+        state["web_search_info"] = {}
+    if "jd_requirements" not in state:
+        state["jd_requirements"] = []
+    if "candidate_skills" not in state:
+        state["candidate_skills"] = []
+    if "status" not in state:
+        state["status"] = "INTERVIEW"
+    if "prev_agent" not in state:
+        state["prev_agent"] = ""
+    
     # 평가가 아직 안된 경우 실행
     if "evaluation" not in state or not state["evaluation"]:
+        print(f"🤖 [INFO] JudgeAgent 평가 시작...")
         judge = JudgeAgent(session_id=request.session_id)
-        evaluation = judge.evaluate(state)
-        state["evaluation"] = evaluation
+        # JudgeAgent.run()은 state를 반환하므로, 업데이트된 state를 받음
+        updated_state = judge.run(state)
+        state.update(updated_state)
+        evaluation = state.get("evaluation", "평가 결과 없음")
+        print(f"✅ [INFO] JudgeAgent 평가 완료")
     else:
         evaluation = state["evaluation"]
     
-    # DB에 저장
+    # DB에 저장 (Interview 모델은 state_json에 전체 상태를 JSON으로 저장)
+    state["status"] = "DONE"  # 최종 상태 업데이트
+    
+    # 비디오 경로 확인 (업로드된 경우)
+    video_path = state.get("video_path")
+    
     interview_record = InterviewModel(
         candidate_name=state["candidate_name"],
         job_title=state["job_title"],
-        jd_summary=json.dumps(state.get("jd_summary", {}), ensure_ascii=False),
-        resume_summary=json.dumps(state.get("resume_summary", {}), ensure_ascii=False),
-        qa_history=json.dumps(state["qa_history"], ensure_ascii=False),
-        evaluation=json.dumps(evaluation, ensure_ascii=False),
-        status="DONE",
-        created_at=datetime.utcnow(),
+        jd_text=state.get("jd_text", ""),
+        resume_text=state.get("resume_text", ""),
+        total_questions=state.get("total_questions", 5),
+        status="DONE",  # 평가 완료 상태
+        state_json=json.dumps(state, ensure_ascii=False),  # 전체 state를 JSON으로 저장
         application_id=state.get("application_id"),
+        video_path=video_path,  # 녹화 비디오 경로
     )
     
     db.add(interview_record)
     db.commit()
     db.refresh(interview_record)
     
-    # 지원서 상태 업데이트
+    # 지원서 상태 업데이트 (인터뷰진행 -> 인터뷰완료)
     if state.get("application_id"):
         application = db.query(ApplicationModel).filter(
             ApplicationModel.id == state["application_id"]
         ).first()
         if application:
-            application.status = "INTERVIEW"  # 면접 완료 상태
+            application.status = "INTERVIEW_COMPLETED"  # 인터뷰완료 상태
             db.commit()
+            print(f"📋 [INFO] 지원서 상태 업데이트: INTERVIEW -> INTERVIEW_COMPLETED (Application ID: {state['application_id']})")
     
-    # 세션 정리
-    del _active_sessions[request.session_id]
+    # 세션 정리 (존재하는 경우에만)
+    if request.session_id in _active_sessions:
+        del _active_sessions[request.session_id]
+        print(f"🗑️ [INFO] 세션 정리 완료: {request.session_id}")
     
     print(f"💾 [INFO] 면접 결과 저장 완료: Interview ID={interview_record.id}")
     
     return EndInterviewResponse(
         status="success",
         interview_id=interview_record.id,
+        message="면접이 성공적으로 종료되었습니다.",
         evaluation=evaluation,
     )
 
@@ -417,4 +454,55 @@ def text_to_speech(request: dict) -> Response:
     except Exception as e:
         print(f"❌ [ERROR] TTS 생성 실패: {e}")
         raise HTTPException(status_code=500, detail=f"TTS 생성 실패: {str(e)}")
+
+
+# 비디오 업로드 요청 스키마
+class VideoUploadRequest(BaseModel):
+    """비디오 업로드 요청"""
+    session_id: str
+    video_data: str  # Base64 encoded video
+
+
+@router.post("/upload-video")
+def upload_video(
+    request: VideoUploadRequest,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    면접 녹화 비디오를 업로드하고 저장합니다.
+    
+    Args:
+        session_id: 면접 세션 ID
+        video_data: Base64 인코딩된 비디오 데이터
+    
+    Returns:
+        저장된 비디오 파일 경로
+    """
+    try:
+        # Base64 디코딩
+        video_bytes = base64.b64decode(request.video_data)
+        
+        # 저장 디렉토리 생성
+        video_dir = Path("server/data/interview_recordings")
+        video_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 파일명 생성 (session_id 기반)
+        video_filename = f"{request.session_id}.webm"
+        video_path = video_dir / video_filename
+        
+        # 파일 저장
+        with open(video_path, "wb") as f:
+            f.write(video_bytes)
+        
+        print(f"📹 [INFO] 비디오 저장 완료: {video_path} ({len(video_bytes)} bytes)")
+        
+        return {
+            "status": "success",
+            "video_path": str(video_path),
+            "file_size": len(video_bytes),
+        }
+    
+    except Exception as e:
+        print(f"❌ [ERROR] 비디오 업로드 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"비디오 업로드 실패: {str(e)}")
 
