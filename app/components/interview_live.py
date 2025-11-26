@@ -56,10 +56,13 @@ def _start_interview_session(application_id: int, candidate_name: str, job_title
                 "total_questions": total_questions,
                 "enable_rag": True,
             },
-            timeout=60,  # 첫 질문 생성에 시간이 걸릴 수 있음
+            timeout=180,  # 3분으로 증가 (JD/Resume 분석 + 질문 생성)
         )
         response.raise_for_status()
         return response.json()
+    except requests.exceptions.Timeout:
+        st.error("면접 준비 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.")
+        return {}
     except requests.exceptions.RequestException as e:
         st.error(f"면접 시작 중 오류 발생: {e}")
         return {}

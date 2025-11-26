@@ -130,6 +130,8 @@ def start_interview(
         job_role=detected_role,
     )
     
+    print(f"🔄 [INFO] Graph 생성 및 분석 시작...")
+    
     # Graph 생성 및 JD/Resume 분석 단계 실행
     graph = create_interview_graph(
         enable_rag=request.enable_rag,
@@ -146,9 +148,12 @@ def start_interview(
     
     # JD_ANALYZER와 RESUME_ANALYZER까지만 실행
     initial_state["status"] = "ANALYZING"
+    print(f"🔄 [INFO] JD/Resume 분석 중...")
     analyzed_state = graph.invoke(initial_state, config=config)
+    print(f"✅ [INFO] JD/Resume 분석 완료")
     
     # Interviewer Agent로 모든 질문 생성
+    print(f"🔄 [INFO] InterviewerAgent로 {request.total_questions}개 질문 생성 시작...")
     interviewer = InterviewerAgent(
         use_rag=request.enable_rag,
         session_id=session_id,
@@ -157,6 +162,7 @@ def start_interview(
     
     # run() 메서드로 모든 질문 생성
     updated_state = interviewer.run(analyzed_state)
+    print(f"✅ [INFO] 질문 생성 완료: {len(updated_state.get('qa_history', []))}개")
     
     # 첫 번째 질문 추출
     if not updated_state["qa_history"] or len(updated_state["qa_history"]) == 0:
