@@ -617,7 +617,21 @@ def render_status_page() -> None:
                             st.error(f"지원 취소 실패: {e}")
                 with btn_interview_col:
                     if st.button("인터뷰 진행", key=f"interview_start_{app['id']}", use_container_width=True):
-                        st.info("인터뷰 진행 기능은 추후 제공될 예정입니다.")
+                        st.session_state["interview_live_context"] = {
+                            "interview_id": None,
+                            "application_id": app["id"],
+                            "candidate_name": st.session_state.get("member_name", "지원자"),
+                            "role": "candidate",
+                            "origin_nav": st.session_state.get("nav_selected_code", "status"),
+                            "current_question": 1,
+                            "total_questions": 5,
+                            "question_text": "본인의 핵심 역량을 90초 안에 소개해주세요.",
+                            "time_limit": 90,
+                            "transcript": [],
+                        }
+                        st.session_state["interview_live_started"] = False
+                        st.session_state["nav_selected_code"] = "interview_live"
+                        st.rerun()
             elif status == "CANCELLED":
                 st.caption("취소됨")
             else:

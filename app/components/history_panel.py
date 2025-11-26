@@ -377,8 +377,21 @@ def render_history_tab() -> None:
                     else:
                         if _update_application_status(application_id, "INTERVIEW"):
                             st.success("지원 상태가 '인터뷰진행'으로 변경되었습니다.")
-                            # 상태 캐시 초기화
                             st.session_state["history_rec_cache"] = {}
+                            st.session_state["interview_live_context"] = {
+                                "interview_id": interview_id,
+                                "application_id": application_id,
+                                "candidate_name": name,
+                                "role": "manager",
+                                "origin_nav": st.session_state.get("nav_selected_code", "history"),
+                                "current_question": 1,
+                                "total_questions": item.get("total_questions", 5) or 5,
+                                "question_text": "회사의 핵심 가치와 자신의 경험을 연결해 설명해주세요.",
+                                "time_limit": 90,
+                                "transcript": [],
+                            }
+                            st.session_state["interview_live_started"] = False
+                            st.session_state["nav_selected_code"] = "interview_live"
                             st.rerun()
 
             # --- 선택된 카드라면, 바로 아래에 상세 패널 렌더 --- #

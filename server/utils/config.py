@@ -190,6 +190,9 @@ class Settings(BaseSettings):
     DB_PATH: str = "interview_history.db"
     SQLALCHEMY_DATABASE_URI: str | None = None
 
+    # ---------- OpenAI ----------
+    OPENAI_API_KEY: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=[str(SERVER_ENV_PATH), str(ROOT_ENV_PATH)],
         case_sensitive=True,

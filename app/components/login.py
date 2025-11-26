@@ -58,7 +58,7 @@ def render_login_page() -> None:
         description = "지원자는 간단한 정보로 로그인/가입 후 채용공고를 확인하고 지원할 수 있습니다."
     else:
         description = "관리자는 기존 면접/Insights/채용공고 관리 메뉴를 사용할 수 있습니다."
-    
+
     st.markdown(
         f"""
         <div style="display:flex;gap:32px;align-items:center;flex-wrap:wrap;">

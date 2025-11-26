@@ -262,7 +262,7 @@ def _render_file_library(file_type: str) -> None:
 
 def render_evaluation(state: Dict[str, Any]) -> None:
     """최종 평가 결과를 인사이트 스타일로 개선된 UI로 렌더링"""
-    
+
     evaluation = state.get("evaluation")
     if not evaluation:
         st.info("평가 결과가 없습니다.")
@@ -408,7 +408,7 @@ def render_evaluation(state: Dict[str, Any]) -> None:
     if scores:
         # 평균 점수 계산
         avg_score = sum(scores.values()) / len(scores) if scores else 0.0
-        
+
         with st.container(border=True):
             st.subheader(f"📈 역량별 점수 분포 (평균: {avg_score:.1f}점)", divider='blue')
             

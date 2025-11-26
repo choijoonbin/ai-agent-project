@@ -84,7 +84,7 @@ def render_sidebar() -> None:
         # 상세 보기 등 메뉴에 없는 코드(job_detail)는 유지하되, 메뉴 하이라이트는 첫 항목 사용
         highlight_code = current_code
         if current_code not in codes:
-            if current_code == "job_detail":
+            if current_code in ("job_detail", "interview_live"):
                 highlight_code = codes[0]
             else:
                 current_code = codes[0]

@@ -44,3 +44,6 @@ PyPDF2>=3.0.0
 
 # Web Search
 tavily-python>=0.3.0
+
+# Audio / Video
+streamlit-webrtc>=0.47.6

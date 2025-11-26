@@ -6,14 +6,19 @@ import sys
 from io import BytesIO
 from pathlib import Path
 
+# ===== 경로 설정 (components, utils import 위함) =====
+APP_DIR = Path(__file__).parent.resolve()
+SERVER_DIR = APP_DIR.parent / "server"
+# utils.state_manager가 server/utils 보다 우선되도록 app 경로를 가장 앞으로
+for sp in (str(APP_DIR), str(SERVER_DIR)):
+    if sp in sys.path:
+        sys.path.remove(sp)
+sys.path.insert(0, str(APP_DIR))
+sys.path.insert(1, str(SERVER_DIR))
+
 import streamlit as st
 from dotenv import load_dotenv
 from PIL import Image
-
-# 경로 설정 (components, utils import 위함)
-APP_DIR = Path(__file__).parent.resolve()
-if str(APP_DIR) not in sys.path:
-    sys.path.insert(0, str(APP_DIR))
 
 from utils.state_manager import init_app_session_state, apply_theme_css
 from components.sidebar import render_sidebar
@@ -24,6 +29,7 @@ from components.overview import render_overview_page
 from components.insights import render_insights_page  # 인사이트 페이지
 from components.login import render_login_page
 from components.volunteer import render_jobs_page, render_status_page, render_job_detail_page
+from components.interview_live import render_interview_live_page
 # settings 는 main 안에서 간단히 렌더링
 
 
@@ -113,6 +119,9 @@ def main() -> None:
 
     elif nav_code == "job_detail":
         render_job_detail_page()
+
+    elif nav_code == "interview_live":
+        render_interview_live_page()
 
     else:  # settings
         _render_settings_page()
