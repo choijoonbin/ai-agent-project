@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from workflow.state import InterviewState, create_initial_state, QATurn
 from workflow.graph import create_interview_graph
-from workflow.agents.interviewer_agent import InterviewerAgent
+from workflow.agents.interview_agent import InterviewerAgent
 from workflow.agents.judge_agent import JudgeAgent
 from workflow.role_classifier import classify_job_role
 from retrieval.loader import get_available_roles
@@ -148,24 +148,24 @@ def start_interview(
     initial_state["status"] = "ANALYZING"
     analyzed_state = graph.invoke(initial_state, config=config)
     
-    # Interviewer Agent로 첫 질문 생성
+    # Interviewer Agent로 모든 질문 생성
     interviewer = InterviewerAgent(
-        enable_rag=request.enable_rag,
+        use_rag=request.enable_rag,
         session_id=session_id,
+        use_mini=True,
     )
     
-    first_qa = interviewer.generate_next_question(analyzed_state)
+    # run() 메서드로 모든 질문 생성
+    updated_state = interviewer.run(analyzed_state)
     
-    if not first_qa or "question" not in first_qa:
-        raise HTTPException(status_code=500, detail="첫 질문 생성에 실패했습니다.")
+    # 첫 번째 질문 추출
+    if not updated_state["qa_history"] or len(updated_state["qa_history"]) == 0:
+        raise HTTPException(status_code=500, detail="질문 생성에 실패했습니다.")
     
-    # QA History에 추가 (답변은 아직 없음)
-    analyzed_state["qa_history"].append({
-        "interviewer": "INTERVIEWER_AGENT",
-        "question": first_qa["question"],
-        "answer": "",
-        "category": first_qa.get("category", "일반"),
-    })
+    first_qa = updated_state["qa_history"][0]
+    
+    # 생성된 상태 사용 (모든 질문이 이미 qa_history에 있음)
+    analyzed_state = updated_state
     
     analyzed_state["status"] = "INTERVIEW"
     analyzed_state["current_question_index"] = 1
@@ -228,29 +228,22 @@ def submit_answer(
             evaluation=evaluation,
         )
     
-    # 다음 질문 생성
-    interviewer = InterviewerAgent(
-        enable_rag=state.get("enable_rag", True),
-        session_id=request.session_id,
-    )
-    
-    next_qa = interviewer.generate_next_question(state)
-    
-    if not next_qa or "question" not in next_qa:
-        raise HTTPException(status_code=500, detail="다음 질문 생성에 실패했습니다.")
-    
-    # QA History에 추가
-    state["qa_history"].append({
-        "interviewer": "INTERVIEWER_AGENT",
-        "question": next_qa["question"],
-        "answer": "",
-        "category": next_qa.get("category", "일반"),
-    })
-    
+    # 다음 질문 가져오기 (이미 생성된 질문 목록에서)
     state["current_question_index"] += 1
     new_q_num = state["current_question_index"]
     
-    print(f"❓ [INFO] 다음 질문 생성: Q{new_q_num} - {next_qa['question'][:50]}...")
+    # 다음 질문이 이미 qa_history에 있는지 확인
+    if new_q_num <= len(state["qa_history"]):
+        # 이미 생성된 질문 사용
+        next_qa = state["qa_history"][new_q_num - 1]
+    else:
+        # qa_history에 없으면 에러 (정상적으로는 발생하지 않아야 함)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"질문 #{new_q_num}을 찾을 수 없습니다. (총 {len(state['qa_history'])}개 질문 생성됨)"
+        )
+    
+    print(f"❓ [INFO] 다음 질문: Q{new_q_num} - {next_qa['question'][:50]}...")
     
     return SubmitAnswerResponse(
         status="continue",
