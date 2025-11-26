@@ -13,7 +13,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -24,6 +24,7 @@ from workflow.agents.judge_agent import JudgeAgent
 from workflow.role_classifier import classify_job_role
 from retrieval.loader import get_available_roles
 from utils.config import get_langfuse_handler
+from utils.openai_audio import synthesize_speech
 from db.database import get_db
 from db.models import Interview as InterviewModel, Application as ApplicationModel
 
@@ -120,8 +121,9 @@ def start_interview(
         # 기존 면접 레코드에서 질문 불러오기
         print(f"✅ [INFO] 기존 면접 레코드 발견 (ID: {existing_interview.id})")
         
-        # qa_history JSON 파싱
-        qa_history = json.loads(existing_interview.qa_history)
+        # state_json에서 전체 상태 파싱
+        state_data = json.loads(existing_interview.state_json)
+        qa_history = state_data.get("qa_history", [])
         
         if not qa_history or len(qa_history) == 0:
             raise HTTPException(status_code=500, detail="기존 면접 레코드에 질문이 없습니다.")
@@ -131,19 +133,16 @@ def start_interview(
             qa["answer"] = ""
         
         # 초기 상태 생성 (기존 데이터 사용)
-        jd_summary = json.loads(existing_interview.jd_summary) if existing_interview.jd_summary else ""
-        resume_summary = json.loads(existing_interview.resume_summary) if existing_interview.resume_summary else ""
-        
         analyzed_state: InterviewState = {
             "job_title": request.job_title,
             "candidate_name": request.candidate_name,
             "jd_text": request.jd_text,
             "resume_text": request.resume_text,
-            "job_role": "general",
-            "jd_summary": jd_summary,
-            "jd_requirements": [],
-            "candidate_summary": resume_summary,
-            "candidate_skills": [],
+            "job_role": state_data.get("job_role", "general"),
+            "jd_summary": state_data.get("jd_summary", ""),
+            "jd_requirements": state_data.get("jd_requirements", []),
+            "candidate_summary": state_data.get("candidate_summary", ""),
+            "candidate_skills": state_data.get("candidate_skills", []),
             "qa_history": qa_history,
             "current_question_index": 0,
             "total_questions": len(qa_history),
@@ -386,4 +385,36 @@ def get_session_status(session_id: str) -> Dict[str, Any]:
         "candidate_name": state["candidate_name"],
         "qa_count": len(state["qa_history"]),
     }
+
+
+@router.post("/tts")
+def text_to_speech(request: dict) -> Response:
+    """
+    텍스트를 음성으로 변환 (TTS)
+    
+    Request body:
+        - text: 변환할 텍스트
+    
+    Returns:
+        audio/mpeg 형식의 오디오 바이트
+    """
+    text = request.get("text", "")
+    if not text:
+        raise HTTPException(status_code=400, detail="텍스트가 비어있습니다.")
+    
+    try:
+        print(f"🔊 [INFO] TTS 요청: {text[:50]}...")
+        audio_bytes = synthesize_speech(text)
+        print(f"✅ [INFO] TTS 응답 생성 완료: {len(audio_bytes)} bytes")
+        
+        return Response(
+            content=audio_bytes,
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": "inline; filename=tts.mp3"
+            }
+        )
+    except Exception as e:
+        print(f"❌ [ERROR] TTS 생성 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS 생성 실패: {str(e)}")
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 import uuid
 import wave
 import requests
@@ -26,13 +27,19 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(SERVER_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVER_ROOT))
 
-from server.utils.openai_audio import synthesize_speech, transcribe_audio
+from server.utils.openai_audio import transcribe_audio
 
 RECORDINGS_DIR = SERVER_ROOT / "data" / "interview_recordings"
 RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
 
 RTC_CONFIG = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+    {
+        "iceServers": [
+            {"urls": ["stun:stun.l.google.com:19302"]},
+            {"urls": ["stun:stun1.l.google.com:19302"]},
+            {"urls": ["stun:stun2.l.google.com:19302"]},
+        ]
+    }
 )
 
 # Backend API URL
@@ -68,22 +75,39 @@ def _start_interview_session(application_id: int, candidate_name: str, job_title
         return {}
 
 
-def _submit_answer(session_id: str, answer: str) -> Dict[str, Any]:
-    """답변 제출 및 다음 질문 받기 API 호출"""
-    try:
-        response = requests.post(
-            f"{BACKEND_URL}/api/v1/interview-live/submit-answer",
-            json={
-                "session_id": session_id,
-                "answer": answer,
-            },
-            timeout=60,
-        )
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        st.error(f"답변 제출 중 오류 발생: {e}")
-        return {}
+def _submit_answer(session_id: str, answer: str, retry: int = 2) -> Dict[str, Any]:
+    """답변 제출 및 다음 질문 받기 API 호출 (재시도 포함)"""
+    last_error = None
+    
+    for attempt in range(retry + 1):
+        try:
+            response = requests.post(
+                f"{BACKEND_URL}/api/v1/interview-live/submit-answer",
+                json={
+                    "session_id": session_id,
+                    "answer": answer,
+                },
+                timeout=60,
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.ConnectionError as e:
+            last_error = e
+            if attempt < retry:
+                st.warning(f"서버 연결 실패. 재시도 중... ({attempt + 1}/{retry})")
+                time.sleep(1)
+            continue
+        except requests.exceptions.Timeout as e:
+            last_error = e
+            st.error("서버 응답 시간 초과. 네트워크 상태를 확인해주세요.")
+            return {}
+        except requests.exceptions.RequestException as e:
+            last_error = e
+            break
+    
+    st.error(f"답변 제출 실패: {last_error}")
+    st.caption("💡 백엔드 서버가 실행 중인지 확인해주세요 (http://localhost:9898)")
+    return {}
 
 
 def _end_interview(session_id: str) -> Dict[str, Any]:
@@ -96,6 +120,12 @@ def _end_interview(session_id: str) -> Dict[str, Any]:
         )
         response.raise_for_status()
         return response.json()
+    except requests.exceptions.ConnectionError as e:
+        st.error("서버에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.")
+        return {}
+    except requests.exceptions.Timeout:
+        st.error("서버 응답 시간 초과. 평가 생성에 시간이 걸리고 있습니다.")
+        return {}
     except requests.exceptions.RequestException as e:
         st.error(f"면접 종료 중 오류 발생: {e}")
         return {}
@@ -202,9 +232,38 @@ def _render_preflight_steps(ctx: Dict[str, Any]) -> None:
 
 
 def _render_timer_html(seconds: int) -> str:
+    """타이머 HTML 렌더링 (정적)"""
     minutes = math.floor(seconds / 60)
     remain = seconds % 60
     return f"<h3 style='text-align: right; color: #38bdf8; margin:0;'>⏱ {minutes:02d}:{remain:02d}</h3>"
+
+
+def _render_countdown_timer(time_limit: int, key: str = "timer") -> None:
+    """실시간 카운트다운 타이머 렌더링"""
+    # 타이머 시작 시간 초기화
+    timer_key = f"timer_start_{key}"
+    if timer_key not in st.session_state:
+        st.session_state[timer_key] = time.time()
+    
+    # 경과 시간 계산
+    elapsed = int(time.time() - st.session_state[timer_key])
+    remaining = max(time_limit - elapsed, 0)
+    
+    minutes = remaining // 60
+    seconds = remaining % 60
+    
+    # 색상: 시간에 따라 변경
+    if remaining > 30:
+        color = "#38bdf8"  # 파란색
+    elif remaining > 10:
+        color = "#fbbf24"  # 노란색
+    else:
+        color = "#f87171"  # 빨간색
+    
+    st.markdown(
+        f"<h3 style='text-align: right; color: {color}; margin:0;'>⏱ {minutes:02d}:{seconds:02d}</h3>",
+        unsafe_allow_html=True
+    )
 
 
 class InterviewAudioProcessor(AudioProcessorBase):
@@ -224,7 +283,10 @@ class InterviewAudioProcessor(AudioProcessorBase):
         print(f"🔧 [DEBUG] InterviewAudioProcessor 인스턴스 생성됨: {id(self)}")
 
     def recv(self, frame):
-        """오디오 프레임 수신 및 버퍼 저장"""
+        """
+        오디오 프레임 수신 및 버퍼 저장
+        - WebRTC가 기본적으로 호출하는 메서드
+        """
         try:
             self._sample_rate = frame.sample_rate
             # PyAV AudioLayout에서 채널 수 가져오기
@@ -243,12 +305,13 @@ class InterviewAudioProcessor(AudioProcessorBase):
                 # 처음 10개 프레임은 로그 출력
                 if self._frame_count <= 10:
                     print(f"🎤 [DEBUG] 프레임 수신됨 #{self._frame_count}: shape={arr.shape}, rate={self._sample_rate}, channels={self._channels}")
+            
             return frame
         except Exception as e:
             print(f"❌ [DEBUG] recv() 오류: {e}")
             import traceback
             traceback.print_exc()
-            raise
+            return frame
 
     def dump_audio(self) -> Tuple[List[np.ndarray], int, int]:
         """버퍼의 오디오 데이터를 추출하고 프레임 카운트도 반환"""
@@ -271,8 +334,20 @@ class InterviewAudioProcessor(AudioProcessorBase):
 
 
 def create_audio_processor():
-    """AudioProcessor Factory 함수"""
+    """
+    AudioProcessor Factory 함수
+    - 싱글톤 패턴: 기존 인스턴스가 있으면 재사용
+    """
     print(f"🏭 [DEBUG] create_audio_processor() 호출됨")
+    
+    # 기존 인스턴스가 있으면 재사용
+    existing_instance = InterviewAudioProcessor.get_instance()
+    if existing_instance:
+        print(f"♻️ [DEBUG] 기존 인스턴스 재사용: {id(existing_instance)}")
+        return existing_instance
+    
+    # 없으면 새로 생성
+    print(f"✨ [DEBUG] 새 인스턴스 생성")
     return InterviewAudioProcessor()
 
 
@@ -280,6 +355,18 @@ def render_interview_live_page() -> None:
     """AI 면접 실시간 화면 렌더링."""
     ctx = _init_context()
     started = st.session_state.get("interview_live_started", False)
+    
+    # 타이머 자동 업데이트를 위한 주기적 새로고침 (면접 진행 중일 때만)
+    if started and ctx.get("interview_started"):
+        # 5초마다 타이머 업데이트
+        if "last_timer_update" not in st.session_state:
+            st.session_state.last_timer_update = time.time()
+        
+        time_since_update = time.time() - st.session_state.last_timer_update
+        if time_since_update >= 5.0:
+            st.session_state.last_timer_update = time.time()
+            time.sleep(0.1)
+            st.rerun()
 
     st.markdown(
         """
@@ -346,9 +433,34 @@ def render_interview_live_page() -> None:
     with header_cols[0]:
         origin = ctx.get("origin_nav", "status")
         if st.button("🔴 면접 종료", type="secondary", use_container_width=True):
-            st.session_state["interview_live_started"] = False
-            st.session_state["nav_selected_code"] = origin
-            st.rerun()
+            # 확인 다이얼로그
+            if not st.session_state.get("confirm_exit", False):
+                st.session_state["confirm_exit"] = True
+                st.warning("⚠️ 정말 면접을 종료하시겠습니까? 진행 중인 답변은 저장되지 않습니다.")
+                
+                confirm_cols = st.columns([1, 1])
+                with confirm_cols[0]:
+                    if st.button("✅ 네, 종료합니다", type="primary", use_container_width=True):
+                        # 면접 세션이 있으면 중간 저장 시도
+                        if ctx.get("session_id") and ctx.get("interview_started"):
+                            try:
+                                result = _end_interview(ctx["session_id"])
+                                if result and "interview_id" in result:
+                                    st.success(f"부분 답변이 저장되었습니다. (ID: {result['interview_id']})")
+                            except:
+                                pass  # 실패해도 종료는 진행
+                        
+                        st.session_state["interview_live_started"] = False
+                        st.session_state["confirm_exit"] = False
+                        st.session_state["nav_selected_code"] = origin
+                        st.rerun()
+                with confirm_cols[1]:
+                    if st.button("❌ 취소", type="secondary", use_container_width=True):
+                        st.session_state["confirm_exit"] = False
+                        st.rerun()
+                st.stop()
+            else:
+                st.session_state["confirm_exit"] = False
 
     with header_cols[1]:
         current = max(ctx["current_question"], 0)
@@ -363,7 +475,11 @@ def render_interview_live_page() -> None:
             st.info("면접을 시작하려면 '면접 시작하기' 버튼을 눌러주세요.")
 
     with header_cols[2]:
-        st.markdown(_render_timer_html(ctx.get("time_limit", 90)), unsafe_allow_html=True)
+        # 면접 진행 중일 때만 실시간 타이머 표시
+        if ctx.get("interview_started"):
+            _render_countdown_timer(ctx.get("time_limit", 90), key=f"q{ctx['current_question']}")
+        else:
+            st.markdown(_render_timer_html(ctx.get("time_limit", 90)), unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -395,6 +511,11 @@ def render_interview_live_page() -> None:
             unsafe_allow_html=True,
         )
 
+    # WebRTC 변수를 블록 바깥에 선언 (스코프 문제 해결)
+    webrtc_key = f"candidate-stream-{ctx.get('session_id', 'default')}"
+    webrtc_ctx = None
+    connection_ready = False
+    
     with video_cols[2]:
         st.subheader("👤 지원자")
         st.markdown(
@@ -410,8 +531,9 @@ def render_interview_live_page() -> None:
             """,
             unsafe_allow_html=True,
         )
+        
         webrtc_ctx = webrtc_streamer(
-            key="candidate-stream",
+            key=webrtc_key,
             mode=WebRtcMode.SENDRECV,
             rtc_configuration=RTC_CONFIG,
             media_stream_constraints={
@@ -435,9 +557,18 @@ def render_interview_live_page() -> None:
                 st.info(f"🎤 오디오 프로세서 활성화됨 (현재 버퍼: {len(processor._buffer)}개 프레임)")
             else:
                 st.warning("⚠️ 오디오 프로세서가 초기화되지 않았습니다. 몇 초 기다린 후 말씀해주세요.")
-        else:
-            st.info("연결 대기 중입니다. 브라우저 접근 권한을 허용해주세요.")
+        elif webrtc_ctx and hasattr(webrtc_ctx, 'state'):
+            # WebRTC 연결 상태 세부 확인
+            state = webrtc_ctx.state
+            if hasattr(state, 'signalling_state'):
+                st.warning(f"⚠️ WebRTC 연결 중... (상태: {state.signalling_state})")
+                st.caption("💡 연결이 오래 걸리면 'STOP' 버튼을 누르고 'START'를 다시 눌러주세요.")
+            else:
+                st.info("연결 대기 중입니다. 브라우저 접근 권한을 허용해주세요.")
             st.caption("💡 팁: 브라우저 주소창 왼쪽의 아이콘을 클릭해 마이크 권한을 '허용'으로 설정하세요.")
+        else:
+            st.warning("⚠️ WebRTC 준비 중입니다. 'START' 버튼을 눌러 연결을 시작해주세요.")
+            st.caption("💡 첫 연결 시 시간이 걸릴 수 있습니다. 'STOP' 후 'START'를 다시 눌러보세요.")
 
     st.markdown("---")
 
@@ -450,7 +581,7 @@ def render_interview_live_page() -> None:
     transcript_placeholder.code(transcript_text, language="text")
 
     st.markdown(
-        "<p style='color:#f87171;'>* 답변이 완료되면 '녹음 저장 및 STT' 버튼을 눌러주세요.</p>",
+        "<p style='color:#f87171;'>* 답변이 완료되면 '녹음 저장 및 STT' 버튼을 눌러주세요. (버튼이 반응하지 않으면 한 번 더 클릭해주세요)</p>",
         unsafe_allow_html=True,
     )
 
@@ -458,6 +589,8 @@ def render_interview_live_page() -> None:
     col_rec, col_tts = st.columns([1, 1])
     with col_rec:
         record_disabled = not connection_ready
+        
+        # 버튼 클릭 처리
         if st.button("💾 녹음 저장 및 STT", use_container_width=True, disabled=record_disabled):
             # webrtc_ctx에서 audio_processor 가져오기
             processor = None
@@ -535,13 +668,32 @@ def render_interview_live_page() -> None:
 
     with col_tts:
         if st.button("🔊 AI 질문 음성 재생", use_container_width=True):
-            try:
-                audio_bytes = synthesize_speech(ctx.get("question_text", "질문이 없습니다."))
-                # gTTS는 MP3 포맷으로 출력
-                st.audio(audio_bytes, format="audio/mp3")
-                st.success("✅ TTS 음성 재생 완료")
-            except Exception as exc:
-                st.error(f"TTS 실행 중 오류: {exc}")
+            with st.spinner("음성을 생성하고 있습니다..."):
+                try:
+                    question_text = ctx.get("question_text", "질문이 없습니다.")
+                    print(f"🔊 [DEBUG] TTS 버튼 클릭: {question_text[:50]}...")
+                    
+                    # 백엔드 API 호출
+                    response = requests.post(
+                        f"{BACKEND_URL}/api/v1/interview-live/tts",
+                        json={"text": question_text},
+                        timeout=30
+                    )
+                    response.raise_for_status()
+                    
+                    audio_bytes = response.content
+                    print(f"✅ [DEBUG] TTS 응답 수신: {len(audio_bytes)} bytes")
+                    
+                    # gTTS는 MP3 포맷으로 출력
+                    st.audio(audio_bytes, format="audio/mp3")
+                    st.success("✅ TTS 음성 재생 완료")
+                except requests.exceptions.Timeout:
+                    st.error("TTS 생성 시간이 초과되었습니다. 다시 시도해주세요.")
+                except requests.exceptions.ConnectionError:
+                    st.error("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.")
+                except Exception as exc:
+                    st.error(f"TTS 실행 중 오류: {exc}")
+                    print(f"❌ [DEBUG] TTS 오류: {exc}")
 
     action_cols = st.columns([1, 1])
     with action_cols[0]:
